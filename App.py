@@ -109,6 +109,3 @@ with tab3:
                 st.success("Salvo com sucesso!")
                 time.sleep(1)
                 st.rerun()
-
-
-n
