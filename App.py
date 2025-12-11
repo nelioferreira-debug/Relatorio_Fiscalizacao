@@ -1,115 +1,114 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
-from datetime import datetime
-import os
+from streamlit_gsheets import GSheetsConnection
+import plotly.express as px
+import time
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Portal de Justificativas", page_icon="📝")
+st.set_page_config(page_title="SGF - Gestão de Fiscalização", page_icon="⚡", layout="wide")
 
-# --- FUNÇÕES AUXILIARES ---
-FILE_DB = 'dados_justificativas.csv'
+# --- LOGIN ---
+USUARIOS = {
+    "CAMPOS": "CAMPOS987", "LAGOS": "LAGOS987", "SERRANA": "SERRANA987",
+    "MACAE": "MACAE987", "SUL": "SUL987", "SÃO GONÇALO": "SÃO GONÇALO987",
+    "NITEROI": "NITEROI987", "MAGÉ": "MAGÉ987", "NOROESTE": "NOROESTE987",
+    "ADMIN": "ADMIN123"
+}
 
+# --- FUNÇÕES ---
 def carregar_dados():
-    """Carrega os dados do arquivo CSV ou cria um novo se não existir."""
-    if not os.path.exists(FILE_DB):
-        # Cria um DataFrame vazio com as colunas necessárias
-        return pd.DataFrame(columns=["Data_Envio", "Polo", "Mes_Referencia", "Justificativa"])
-    return pd.read_csv(FILE_DB)
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(worksheet="Dados", ttl=0)
+    df['ID'] = df['ID'].astype(str) # Garante que ID é texto
+    return df, conn
 
-def salvar_dados(novo_dado):
-    """Salva uma nova linha no arquivo CSV."""
-    df = carregar_dados()
-    # Concatena o novo dado com o DataFrame existente
-    df = pd.concat([df, pd.DataFrame([novo_dado])], ignore_index=True)
-    df.to_csv(FILE_DB, index=False)
+def salvar_dados(conn, df):
+    conn.update(worksheet="Dados", data=df)
+    st.cache_data.clear()
 
-# --- INTERFACE PRINCIPAL ---
-st.title("📝 Sistema de Justificativas dos Polos")
-st.markdown("---")
+# --- TELA LOGIN ---
+if 'logado' not in st.session_state:
+    st.session_state['logado'] = False
 
-# Menu lateral para navegação
-menu = st.sidebar.selectbox("Menu", ["Enviar Justificativa", "Área do Administrador"])
+if not st.session_state['logado']:
+    st.markdown("<h1 style='text-align:center'>⚡ SGF Login</h1>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1,2,1])
+    with c2:
+        with st.form("login"):
+            user = st.selectbox("Polo", list(USUARIOS.keys()))
+            pwd = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar"):
+                if USUARIOS[user] == pwd:
+                    st.session_state['logado'] = True
+                    st.session_state['usuario'] = user
+                    st.rerun()
+                else:
+                    st.error("Senha incorreta")
+    st.stop() # Para o código aqui se não estiver logado
 
-# --- PÁGINA DE ENVIO (Para os Polos) ---
-if menu == "Enviar Justificativa":
-    st.header("Envio de Justificativa Mensal")
-    st.info("Preencha os dados abaixo para registrar a justificativa do seu polo.")
+# --- SISTEMA PRINCIPAL ---
+st.sidebar.title(f"📍 {st.session_state['usuario']}")
+if st.sidebar.button("Sair"):
+    st.session_state['logado'] = False
+    st.rerun()
 
-    with st.form("form_justificativa", clear_on_submit=True):
-        # Lista de Polos (Você pode editar essa lista)
-        lista_polos = ["Polo Centro", "Polo Norte", "Polo Sul", "Polo Leste", "Polo Oeste"]
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            polo = st.selectbox("Selecione o Polo:", lista_polos)
-        with col2:
-            # Lista de meses para facilitar
-            meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
-                     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-            mes_ref = st.selectbox("Mês de Referência:", meses)
-        
-        texto_justificativa = st.text_area("Descreva a justificativa:", height=150)
-        
-        enviado = st.form_submit_button("Enviar Justificativa")
+# Carrega Dados
+try:
+    df, conn = carregar_dados()
+except Exception as e:
+    st.error(f"Erro na conexão com Planilha: {e}")
+    st.stop()
 
-        if enviado:
-            if not texto_justificativa:
-                st.error("Por favor, escreva uma justificativa antes de enviar.")
-            else:
-                # Prepara os dados
-                novo_registro = {
-                    "Data_Envio": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                    "Polo": polo,
-                    "Mes_Referencia": mes_ref,
-                    "Justificativa": texto_justificativa
-                }
-                
-                # Salva
-                salvar_dados(novo_registro)
-                st.success(f"Justificativa do {polo} referente a {mes_ref} salva com sucesso!")
+# Filtra dados do usuário
+user_atual = st.session_state['usuario']
+df_user = df if user_atual == "ADMIN" else df[df['polo'] == user_atual]
 
-# --- ÁREA ADMINISTRATIVA (Para Você) ---
-elif menu == "Área do Administrador":
-    st.header("🔒 Acesso Restrito")
-    
-    # Senha simples para evitar curiosos (não é segurança de nível bancário!)
-    senha = st.sidebar.text_input("Senha de Admin", type="password")
-    
-    if senha == "admin123":  # Você mudará essa senha depois
-        st.success("Acesso Liberado")
-        
-        df = carregar_dados()
-        
-        if df.empty:
-            st.warning("Nenhuma justificativa recebida ainda.")
-        else:
-            st.subheader("Registros Recebidos")
-            
-            # Filtros
-            filtro_polo = st.multiselect("Filtrar por Polo", df["Polo"].unique())
-            if filtro_polo:
-                df = df[df["Polo"].isin(filtro_polo)]
-            
-            # Mostra a tabela interativa
-            st.dataframe(df, use_container_width=True)
-            
-            # Botão para baixar em Excel/CSV
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Baixar Relatório Completo (CSV)",
-                data=csv,
-                file_name='relatorio_justificativas.csv',
-                mime='text/csv',
-            )
-            
-            # Métricas simples
-            st.metric("Total de Justificativas", len(df))
-    
-    elif senha:
-        st.error("Senha incorreta.")
+tab1, tab2, tab3 = st.tabs(["📊 Visão Geral", "🏢 Meu Polo", "📝 Justificar"])
+
+with tab1:
+    st.metric("Total Fiscalizações", len(df))
+    # Gráfico simples
+    if not df.empty and 'data_exec_corte' in df.columns:
+        fig = px.bar(df.groupby('data_exec_corte').size().reset_index(name='Qtd'), x='data_exec_corte', y='Qtd')
+        st.plotly_chart(fig, use_container_width=True)
+
+with tab2:
+    st.metric("Total Polo", len(df_user))
+    if not df_user.empty and 'status' in df_user.columns:
+        fig2 = px.pie(df_user, names='status')
+        st.plotly_chart(fig2, use_container_width=True)
+
+with tab3:
+    st.header("Tratamento de Pendências")
+    ids = df_user['ID'].unique().tolist()
+    if not ids:
+        st.info("Nenhuma ordem encontrada.")
     else:
-        st.info("Digite a senha no menu lateral para visualizar os dados.")
+        sel_id = st.selectbox("Selecione ID da Ordem", ids)
+        # Filtra linha
+        mask = df['ID'] == sel_id
+        idx = df[mask].index[0]
+        row = df.loc[idx]
+        
+        # Mostra dados (Resumido para caber na tela)
+        st.info(f"Cliente: {row.get('numero_cliente', '-')} | Endereço: {row.get('desc_rede', '-')}")
+        
+        with st.form("justificativa"):
+            c1, c2 = st.columns(2)
+            with c1:
+                just = st.selectbox("Justificativa", ["", "Agrupamento", "Sem acesso", "Outros"], index=0)
+                obs = st.text_area("Obs Polo", value=str(row.get('Obs_polo', '')))
+            with c2:
+                conf = st.selectbox("Conformidade", ["", "Conforme", "Não Conforme"], index=0)
+            
+            if st.form_submit_button("Salvar"):
+                df.at[idx, 'Justificativa_polo'] = just
+                df.at[idx, 'Obs_polo'] = obs
+                df.at[idx, 'Conformidade_polo'] = conf
+                salvar_dados(conn, df)
+                st.success("Salvo com sucesso!")
+                time.sleep(1)
+                st.rerun()
 
-# Rodapé
-st.markdown("---")
-st.caption("Desenvolvido para gestão de polos.")
+
+n
