@@ -42,6 +42,10 @@ OPCOES_OBS = [
     "Solicitado poste/executado ramal", "Solicitado medidor/executado poste"
 ]
 
+OPCOES_CONF_GRIDS = ["", "Justificado", "Não Conforme", "Sem vestígio", "Trâmite Divergente"]
+OPCOES_SANCAO = ["", "I", "II", "III", "NÃO APLICADA"]
+OPCOES_MULTA = ["", "SIM", "NÃO", "EM ANDAMENTO"]
+
 # --- CONEXÃO COM GOOGLE SHEETS ---
 def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -184,38 +188,71 @@ with tab3:
             st.markdown("### ✍️ Preenchimento do Polo")
             
             with st.form("form_tratativa"):
-                # Campos de Edição
-                col_e1, col_e2 = st.columns(2)
+                # Campos de Edição - Divididos em 3 colunas para caber tudo
+                col_e1, col_e2, col_e3 = st.columns(3)
                 
                 with col_e1:
-                    # Tenta pegar o valor atual, se não existir, usa o primeiro da lista
+                    st.markdown("**Análise do Polo**")
+                    # Justificativa
                     val_just = linha.get('Justificativa_polo')
                     idx_just = OPCOES_JUSTIFICATIVA.index(val_just) if val_just in OPCOES_JUSTIFICATIVA else 0
                     nova_just = st.selectbox("Justificativa", OPCOES_JUSTIFICATIVA, index=idx_just)
                     
+                    # Observação
                     val_obs = linha.get('Obs_polo')
                     idx_obs = OPCOES_OBS.index(val_obs) if val_obs in OPCOES_OBS else 0
                     nova_obs = st.selectbox("Observação", OPCOES_OBS, index=idx_obs)
 
                 with col_e2:
+                    st.markdown("**Conformidade & Notificação**")
+                    # Conformidade Polo
                     nova_conf = st.selectbox("Conformidade Polo", ["", "Conforme", "Não Conforme"], 
                                            index=1 if linha.get('Conformidade_polo') == "Conforme" else 2 if linha.get('Conformidade_polo') == "Não Conforme" else 0)
                     
+                    # Conformidade Grids
+                    val_grids = linha.get('Conformidade_grids')
+                    idx_grids = OPCOES_CONF_GRIDS.index(val_grids) if val_grids in OPCOES_CONF_GRIDS else 0
+                    nova_conf_grids = st.selectbox("Conformidade Grids", OPCOES_CONF_GRIDS, index=idx_grids)
+
+                    # Notificação
                     nova_notificacao = st.selectbox("Notificação?", ["", "SIM", "NÃO"], 
                                                   index=1 if linha.get('NOTIFICAÇÃO?') == "SIM" else 2 if linha.get('NOTIFICAÇÃO?') == "NÃO" else 0)
 
+                with col_e3:
+                    st.markdown("**Sanções e Multas**")
+                    # Sanção
+                    val_sancao = linha.get('SANÇÃO')
+                    idx_sancao = OPCOES_SANCAO.index(val_sancao) if val_sancao in OPCOES_SANCAO else 0
+                    nova_sancao = st.selectbox("Sanção", OPCOES_SANCAO, index=idx_sancao)
+                    
+                    # Valor
+                    novo_valor = st.text_input("Valor (R$)", value=str(linha.get('VALOR', '')))
+
+                    # Multa e Valor Multa
+                    val_multa = linha.get('MULTA?')
+                    idx_multa = OPCOES_MULTA.index(val_multa) if val_multa in OPCOES_MULTA else 0
+                    nova_multa = st.selectbox("Multa?", OPCOES_MULTA, index=idx_multa)
+                    
+                    novo_valor_multa = st.text_input("Valor Multa (R$)", value=str(linha.get('VALOR MULTA', '')))
+
                 # Botão de Salvar
-                if st.form_submit_button("💾 Salvar Tratativa", type="primary"):
+                st.markdown("---")
+                if st.form_submit_button("💾 Salvar Tratativa Completa", type="primary"):
                     # Atualiza o DataFrame em memória
                     df.at[idx, 'Justificativa_polo'] = nova_just
                     df.at[idx, 'Obs_polo'] = nova_obs
                     df.at[idx, 'Conformidade_polo'] = nova_conf
+                    df.at[idx, 'Conformidade_grids'] = nova_conf_grids
                     df.at[idx, 'NOTIFICAÇÃO?'] = nova_notificacao
+                    df.at[idx, 'SANÇÃO'] = nova_sancao
+                    df.at[idx, 'VALOR'] = novo_valor
+                    df.at[idx, 'MULTA?'] = nova_multa
+                    df.at[idx, 'VALOR MULTA'] = novo_valor_multa
                     
                     # Envia para o Google Sheets
                     sucesso = salvar_dados(conn, df)
                     
                     if sucesso:
-                        st.success("✅ Salvo com sucesso no Google Sheets!")
+                        st.success("✅ Todos os dados foram salvos no Google Sheets!")
                         time.sleep(1)
                         st.rerun()
