@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import plotly.express as px
+import plotly.graph_objects as go # Importação necessária para o Pareto
 import time
 import urllib.parse 
 
@@ -111,7 +112,7 @@ def limpar_input_edicao(valor):
         return ""
     return str(valor)
 
-# --- TELA DE LOGIN ---
+# --- TELA DE LOGIN (OTIMIZADA) ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
@@ -333,19 +334,51 @@ with tab1:
     p3, p4 = st.columns(2)
 
     with p3:
-        # Gráfico 7: Volume de Não Conformidades por Polo
+        # Gráfico 7: Pareto de Não Conformidades (Ofensores)
         if 'polo' in df.columns and 'classificacao' in df.columns:
             # Filtra apenas o que é "Não Conforme"
             df_nc = df[df['classificacao'].astype(str) == 'Não Conforme']
             df_nc_polo = df_nc['polo'].value_counts().reset_index()
-            df_nc_polo.columns = ['Polo', 'Qtd Não Conforme']
+            df_nc_polo.columns = ['Polo', 'Qtd']
             
-            fig_nc = px.bar(df_nc_polo, x='Polo', y='Qtd Não Conforme', text='Qtd Não Conforme',
-                          title="Volume de Não Conformidades (Ofensores)",
-                          color_discrete_sequence=['#FFA500']) # Laranja para alerta
+            # Ordena e Calcula Acumulado
+            df_nc_polo = df_nc_polo.sort_values(by='Qtd', ascending=False)
+            df_nc_polo['perc_acum'] = (df_nc_polo['Qtd'].cumsum() / df_nc_polo['Qtd'].sum()) * 100
             
-            fig_nc.update_layout(yaxis_visible=False)
-            fig_nc.update_traces(textposition='outside')
+            # Cria a Figura com Graph Objects para Eixos Duplos
+            fig_nc = go.Figure()
+            
+            # Barras
+            fig_nc.add_trace(go.Bar(
+                x=df_nc_polo['Polo'],
+                y=df_nc_polo['Qtd'],
+                name='Qtd',
+                marker_color='#FFA500',
+                text=df_nc_polo['Qtd'],
+                textposition='outside'
+            ))
+            
+            # Linha (% Acumulado)
+            fig_nc.add_trace(go.Scatter(
+                x=df_nc_polo['Polo'],
+                y=df_nc_polo['perc_acum'],
+                name='% Acumulado',
+                yaxis='y2',
+                mode='lines+markers+text',
+                line=dict(color='#00549F', width=3),
+                text=df_nc_polo['perc_acum'].apply(lambda x: f'{x:.0f}%'),
+                textposition='top center'
+            ))
+            
+            # Layout
+            fig_nc.update_layout(
+                title="Pareto de Não Conformidades (Ofensores)",
+                yaxis=dict(title='Quantidade', showgrid=False, visible=False),
+                yaxis2=dict(title='% Acumulado', overlaying='y', side='right', showgrid=False, range=[0, 110], visible=False),
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
             st.plotly_chart(fig_nc, use_container_width=True)
 
     with p4:
