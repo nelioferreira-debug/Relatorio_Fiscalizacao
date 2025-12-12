@@ -160,7 +160,8 @@ with tab3:
         st.info("Nenhuma ordem para exibir.")
     else:
         lista_ids = df_user['ID'].unique().tolist()
-        id_selecionado = st.selectbox("Pesquise o ID da Ordem:", lista_ids)
+        # Adicionado key para controle de estado
+        id_selecionado = st.selectbox("Pesquise o ID da Ordem:", lista_ids, key="seletor_ordem")
         mascara = df['ID'] == id_selecionado
         
         if not mascara.any():
@@ -328,7 +329,19 @@ with tab3:
                     
                     sucesso = salvar_dados(conn, df)
                     if sucesso:
-                        st.success("✅ Salvo com sucesso!")
+                        st.success("✅ Salvo com sucesso! Carregando próximo...")
+                        
+                        # Lógica para avançar automaticamente
+                        try:
+                            idx_atual = lista_ids.index(id_selecionado)
+                            if idx_atual + 1 < len(lista_ids):
+                                proximo_id = lista_ids[idx_atual + 1]
+                                st.session_state['seletor_ordem'] = proximo_id
+                            else:
+                                st.info("Você chegou ao fim da lista!")
+                        except ValueError:
+                            pass
+
                         time.sleep(1)
                         st.rerun()
 
