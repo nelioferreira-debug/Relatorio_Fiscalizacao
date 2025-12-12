@@ -204,7 +204,6 @@ with tab1:
 
     # Métricas Principais
     total_ordens = len(df)
-    # Considera tratado se o campo Justificativa_polo não estiver vazio
     tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
@@ -233,35 +232,57 @@ with tab1:
     st.markdown("---")
     st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
     
+    # Preparação de datas para os gráficos
+    df_dates = df.copy()
+    # Convertendo para datetime, forçando erros a NaT e formato dia primeiro
+    if 'data_exec_corte' in df_dates.columns:
+        df_dates['dt_exec'] = pd.to_datetime(df_dates['data_exec_corte'], dayfirst=True, errors='coerce')
+        df_dates = df_dates.dropna(subset=['dt_exec']) # Remove datas inválidas
+    else:
+        df_dates = pd.DataFrame()
+
     # Layout em Linha Única para os 4 Gráficos de Foco
     g1, g2, g3, g4 = st.columns(4)
     
-    cores_pizza = ['#00549F', '#A0A0A0', '#FFA500']
-    
     with g1:
-        # Gráfico 1: Classificação (Pizza)
-        if 'classificacao' in df.columns:
-            st.caption("Conformidade_polo")
-            df_class = df['classificacao'].value_counts().reset_index()
-            df_class.columns = ['Resultado', 'Qtd']
-            fig_pizza = px.pie(df_class, values='Qtd', names='Resultado', 
-                             color_discrete_sequence=cores_pizza,
-                             hole=0.4)
-            fig_pizza.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0)) # Compactar
-            st.plotly_chart(fig_pizza, use_container_width=True)
+        # Gráfico 1: Volume Diário (Barras Verticais)
+        if not df_dates.empty:
+            st.caption("Volume Diário")
+            df_dia = df_dates['dt_exec'].value_counts().reset_index()
+            df_dia.columns = ['Data', 'Qtd']
+            df_dia = df_dia.sort_values('Data')
+            
+            fig_dia = px.bar(df_dia, x='Data', y='Qtd', text='Qtd',
+                           color_discrete_sequence=['#00549F'])
+            fig_dia.update_layout(yaxis_visible=False, margin=dict(t=0, b=0, l=0, r=0))
+            fig_dia.update_traces(textposition='outside')
+            st.plotly_chart(fig_dia, use_container_width=True)
             
     with g2:
-        # Gráfico 2: Status (Barras Horizontais)
-        if 'status' in df.columns:
-            st.caption("Top Irregularidades")
-            df_status = df['status'].value_counts().head(5).reset_index()
-            df_status.columns = ['Tipo', 'Qtd']
-            fig_bar = px.bar(df_status, x='Qtd', y='Tipo', orientation='h',
-                           text='Qtd',
-                           color='Qtd', color_continuous_scale='Blues')
-            fig_bar.update_layout(xaxis_visible=False, yaxis={'categoryorder':'total ascending'}, margin=dict(t=0, b=0, l=0, r=0))
-            fig_bar.update_traces(textposition='inside')
-            st.plotly_chart(fig_bar, use_container_width=True)
+        # Gráfico 2: Média por Dia da Semana
+        if not df_dates.empty:
+            st.caption("Melhores Dias (Média)")
+            # 1. Contagem por data específica
+            daily_counts = df_dates.groupby('dt_exec').size().reset_index(name='count')
+            # 2. Extrai dia da semana
+            daily_counts['day_name'] = daily_counts['dt_exec'].dt.day_name()
+            # 3. Média por dia da semana
+            avg_dow = daily_counts.groupby('day_name')['count'].mean().reset_index()
+            
+            # Ordenação dos dias
+            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            days_map = {'Monday': 'Seg', 'Tuesday': 'Ter', 'Wednesday': 'Qua', 'Thursday': 'Qui', 
+                       'Friday': 'Sex', 'Saturday': 'Sab', 'Sunday': 'Dom'}
+            
+            avg_dow['day_name'] = pd.Categorical(avg_dow['day_name'], categories=days_order, ordered=True)
+            avg_dow = avg_dow.sort_values('day_name')
+            avg_dow['day_label'] = avg_dow['day_name'].map(days_map)
+            
+            fig_dow = px.bar(avg_dow, x='day_label', y='count', text=avg_dow['count'].apply(lambda x: f'{x:.1f}'),
+                           color_discrete_sequence=['#4093D6'])
+            fig_dow.update_layout(yaxis_visible=False, xaxis_title=None, margin=dict(t=0, b=0, l=0, r=0))
+            fig_dow.update_traces(textposition='outside')
+            st.plotly_chart(fig_dow, use_container_width=True)
 
     with g3:
         # Gráfico 3: Tipo de Corte (Vertical)
