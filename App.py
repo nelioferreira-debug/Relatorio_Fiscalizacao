@@ -78,10 +78,8 @@ OPCOES_MULTA = ["", "SIM", "NÃO", "EM ANDAMENTO"]
 def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Dados", ttl=0)
-    
     if 'ID' in df.columns:
         df['ID'] = df['ID'].astype(str).str.replace(r'\.0$', '', regex=True)
-    
     return df, conn
 
 def salvar_dados(conn, df):
@@ -112,15 +110,28 @@ def limpar_input_edicao(valor):
         return ""
     return str(valor)
 
+def limpar_valor_moeda(valor):
+    if pd.isna(valor) or str(valor).strip() == "":
+        return 0.0
+    # Remove R$, espaços e converte para float (ex: 1.200,50 -> 1200.50)
+    # Assumindo formato brasileiro onde , é decimal e . é milhar, ou formato simples
+    s = str(valor).replace("R$", "").replace(" ", "")
+    if "," in s and "." in s: # Ex: 1.000,00
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s: # Ex: 1000,00
+        s = s.replace(",", ".")
+    try:
+        return float(s)
+    except:
+        return 0.0
+
 # --- TELA DE LOGIN (OTIMIZADA) ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
 if not st.session_state['logado']:
     st.markdown("<h1 style='text-align: center; color: #00549F;'>⚡ SGF - Login</h1>", unsafe_allow_html=True)
-    
     col_login = st.columns([1, 10, 1])
-    
     with col_login[1]:
         with st.form("login"):
             user = st.selectbox("Selecione o Polo", list(USUARIOS.keys()))
@@ -202,36 +213,41 @@ with tab1:
     st.markdown("<h2 style='color: #00549F;'>📊 Dashboard Executivo de Fiscalização</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Métricas Principais
+    # Cálculos das Métricas
     total_ordens = len(df)
     tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
 
+    perc_autoreligado = 0
     if 'Estado de Fornecimento' in df.columns:
         qtd_autoreligado = df[df['Estado de Fornecimento'].astype(str).str.lower() == 'autoreligado'].shape[0]
         perc_autoreligado = (qtd_autoreligado / total_ordens * 100) if total_ordens > 0 else 0
-    else:
-        perc_autoreligado = 0
 
+    perc_lacre = 0
     if 'Instalação do Lacre' in df.columns:
         qtd_com_lacre = df[~df['Instalação do Lacre'].astype(str).str.lower().str.contains('sem', na=True)].shape[0]
         perc_lacre = (qtd_com_lacre / total_ordens * 100) if total_ordens > 0 else 0
-    else:
-        perc_lacre = 0
 
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    # Cálculo do Valor Total de Multas
+    total_multas = 0.0
+    if 'VALOR MULTA' in df.columns:
+        total_multas = df['VALOR MULTA'].apply(limpar_valor_moeda).sum()
+
+    # Layout de linha única (7 colunas)
+    m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
     m1.metric("Total Fiscalizações", total_ordens)
     m2.metric("Concluídas", tratados_geral, delta=f"{percentual_geral:.1f}%")
     m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
     m4.metric("Dias Restantes", "5", "Estimativa")
     m5.metric("% Com Lacre", f"{perc_lacre:.1f}%")
     m6.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
+    m7.metric("Total Multas", f"R$ {total_multas:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     st.markdown("---")
     st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
     
-    # Preparação de datas para os gráficos
+    # Preparação de dados
     df_dates = df.copy()
     if 'data_exec_corte' in df_dates.columns:
         df_dates['dt_exec'] = pd.to_datetime(df_dates['data_exec_corte'], dayfirst=True, errors='coerce')
@@ -239,7 +255,6 @@ with tab1:
     else:
         df_dates = pd.DataFrame()
 
-    # Cores Enel
     azul_enel = '#00549F'
     azul_claro = '#4093D6'
     laranja = '#FFA500'
@@ -254,9 +269,7 @@ with tab1:
             df_dia = df_dates['dt_exec'].value_counts().reset_index()
             df_dia.columns = ['Data', 'Qtd']
             df_dia = df_dia.sort_values('Data')
-            
-            fig_dia = px.area(df_dia, x='Data', y='Qtd', 
-                            color_discrete_sequence=[azul_enel])
+            fig_dia = px.area(df_dia, x='Data', y='Qtd', color_discrete_sequence=[azul_enel])
             fig_dia.update_layout(yaxis_visible=False, xaxis_title=None, margin=dict(t=10, b=0, l=0, r=0), height=320)
             st.plotly_chart(fig_dia, use_container_width=True)
             
@@ -267,28 +280,23 @@ with tab1:
             daily_counts = df_dates.groupby('dt_exec').size().reset_index(name='count')
             daily_counts['day_name'] = daily_counts['dt_exec'].dt.day_name()
             avg_dow = daily_counts.groupby('day_name')['count'].mean().reset_index()
-            
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             days_pt = {'Monday': 'Seg', 'Tuesday': 'Ter', 'Wednesday': 'Qua', 'Thursday': 'Qui', 'Friday': 'Sex', 'Saturday': 'Sab', 'Sunday': 'Dom'}
-            
             avg_dow['day_name'] = pd.Categorical(avg_dow['day_name'], categories=days_order, ordered=True)
             avg_dow = avg_dow.sort_values('day_name')
             avg_dow['day_label'] = avg_dow['day_name'].map(days_pt)
-            
-            fig_radar = px.line_polar(avg_dow, r='count', theta='day_label', line_close=True,
-                                    color_discrete_sequence=[laranja])
+            fig_radar = px.line_polar(avg_dow, r='count', theta='day_label', line_close=True, color_discrete_sequence=[laranja])
             fig_radar.update_traces(fill='toself')
             fig_radar.update_layout(margin=dict(t=20, b=20, l=20, r=20), height=320)
             st.plotly_chart(fig_radar, use_container_width=True)
 
     with g3:
-        # Gráfico 3: Donut Chart (Grupo) - Movido para cá
+        # Gráfico 3: Donut Chart (Grupo)
         if 'grupo' in df.columns:
             st.caption("Grupo de Serviço")
             df_grupo = df['grupo'].value_counts().reset_index()
             df_grupo.columns = ['Grupo', 'Qtd']
-            fig_donut = px.pie(df_grupo, values='Qtd', names='Grupo', hole=0.6,
-                             color_discrete_sequence=px.colors.sequential.Blues_r)
+            fig_donut = px.pie(df_grupo, values='Qtd', names='Grupo', hole=0.6, color_discrete_sequence=px.colors.sequential.Blues_r)
             fig_donut.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=320)
             fig_donut.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig_donut, use_container_width=True)
@@ -299,23 +307,42 @@ with tab1:
     p1, p2, p3 = st.columns(3)
 
     with p1:
-        # Gráfico 4: Barras Empilhadas (Status de Entrega)
+        # Gráfico 4: Status de Entrega
         if 'polo' in df.columns and 'Justificativa_polo' in df.columns:
             st.caption("Status de Entrega por Polo")
             df_stack = df.copy()
             df_stack['Status'] = df_stack['Justificativa_polo'].apply(lambda x: 'Concluído' if pd.notna(x) and x != "" else 'Pendente')
-            
             df_polo_status = df_stack.groupby(['polo', 'Status']).size().reset_index(name='Qtd')
-            
             fig_stack = px.bar(df_polo_status, x='Qtd', y='polo', color='Status', orientation='h',
-                             color_discrete_map={'Concluído': azul_enel, 'Pendente': '#D3D3D3'},
-                             text='Qtd')
-            
+                             color_discrete_map={'Concluído': azul_enel, 'Pendente': '#D3D3D3'}, text='Qtd')
             fig_stack.update_layout(xaxis_visible=False, legend_title=None, margin=dict(t=0, b=0, l=0, r=0), height=320)
             st.plotly_chart(fig_stack, use_container_width=True)
 
     with p2:
-        # Gráfico 5: Pareto (Não Conformidades) - Movido para cá
+        # Gráfico 5 (NOVO): Reversão (Não Conforme vs Conforme do Polo)
+        if 'classificacao' in df.columns and 'Conformidade_polo' in df.columns:
+            st.caption("Reversão: Não Conforme (Entrada) x Conforme (Saída)")
+            
+            # Conta Total de Não Conforme na base original (Entrada)
+            qtd_nc_entrada = df[df['classificacao'].astype(str) == 'Não Conforme'].shape[0]
+            
+            # Conta Total de Conforme apontado pelos Polos (Saída/Reversão)
+            qtd_conf_saida = df[df['Conformidade_polo'].astype(str) == 'Conforme'].shape[0]
+            
+            df_reversao = pd.DataFrame({
+                'Tipo': ['Não Conforme (Entrada)', 'Revertido (Conforme)'],
+                'Qtd': [qtd_nc_entrada, qtd_conf_saida],
+                'Cor': [laranja, azul_enel] # Laranja para o problema, Azul para a solução
+            })
+            
+            fig_rev = px.bar(df_reversao, x='Qtd', y='Tipo', orientation='h', text='Qtd',
+                           color='Tipo', color_discrete_map={'Não Conforme (Entrada)': laranja, 'Revertido (Conforme)': azul_enel})
+            
+            fig_rev.update_layout(xaxis_visible=False, showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=320)
+            st.plotly_chart(fig_rev, use_container_width=True)
+
+    with p3:
+        # Gráfico 6: Pareto (Não Conformidades)
         if 'polo' in df.columns and 'classificacao' in df.columns:
             st.caption("Pareto de Não Conformidades")
             df_nc = df[df['classificacao'].astype(str) == 'Não Conforme']
@@ -335,24 +362,10 @@ with tab1:
             )
             st.plotly_chart(fig_nc, use_container_width=True)
 
-    with p3:
-        # Gráfico 6: Dot Plot (SLA) - Movido para cá
-        if 'polo' in df.columns and 'data_exec_corte' in df.columns and 'data_solic_corte' in df.columns:
-            st.caption("Tempo Médio de Atendimento (SLA)")
-            df_sla = df.copy()
-            df_sla['dt_solic'] = pd.to_datetime(df_sla['data_solic_corte'], dayfirst=True, errors='coerce')
-            df_sla['dt_exec'] = pd.to_datetime(df_sla['data_exec_corte'], dayfirst=True, errors='coerce')
-            df_sla['dias_sla'] = (df_sla['dt_exec'] - df_sla['dt_solic']).dt.days
-            
-            df_sla_polo = df_sla.groupby('polo')['dias_sla'].mean().reset_index()
-            df_sla_polo.columns = ['Polo', 'Média Dias']
-            df_sla_polo = df_sla_polo.sort_values('Média Dias', ascending=False)
-            
-            fig_sla = px.scatter(df_sla_polo, x='Média Dias', y='Polo', text=df_sla_polo['Média Dias'].apply(lambda x: f'{x:.1f}d'),
-                               color_discrete_sequence=[azul_claro])
-            fig_sla.update_traces(marker=dict(size=12), textposition='middle right')
-            fig_sla.update_layout(xaxis_visible=False, margin=dict(t=0, b=0, l=0, r=0), height=320)
-            st.plotly_chart(fig_sla, use_container_width=True)
+    # --- LINHA 3: SLA E OUTROS (Opcional, mantido se sobrar espaço ou quiser ver) ---
+    # Se quiser, podemos colocar o SLA aqui ou deixar oculto para focar nos 6 principais.
+    # Por enquanto, vou deixar comentado para não poluir, já que temos 6 gráficos bem definidos.
+    # st.caption("Tempo Médio de Atendimento (SLA)") ...
 
 # --- ABA 2: MEU POLO ---
 with tab2:
@@ -370,18 +383,13 @@ with tab3:
         st.info("Nenhuma ordem para exibir.")
     else:
         # --- ORDENAÇÃO INTELIGENTE DA LISTA ---
-        # 1. Copia o dataframe para não bagunçar
         df_ordenado = df_user.copy()
-        
-        # 2. Cria coluna de prioridade (0 = Pendente, 1 = Preenchido)
         if 'Justificativa_polo' in df_ordenado.columns:
             df_ordenado['_prioridade'] = df_ordenado['Justificativa_polo'].apply(
                 lambda x: 0 if pd.isna(x) or str(x).strip() == "" else 1
             )
-            # 3. Ordena: Pendentes (0) primeiro
             df_ordenado = df_ordenado.sort_values(by='_prioridade', ascending=True)
         
-        # 4. Gera a lista de IDs baseada nessa ordem
         lista_ids = df_ordenado['ID'].unique().tolist()
         
         if 'indice_navegacao' not in st.session_state:
@@ -400,7 +408,6 @@ with tab3:
             idx = df[mascara].index[0]
             linha = df.loc[idx]
             
-            # Cálculos de Data
             diferenca_texto = "-"
             data_exec_completa = "-"
             data_solic_formatada = "-" 
@@ -425,13 +432,11 @@ with tab3:
 
             st.markdown("---")
             
-            # --- PREPARAÇÃO DE DADOS PARA EXIBIÇÃO ---
             val_id_formatado = formatar_sem_decimal(linha.get('ID'))
             val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
             codigo_municipio_limpo = formatar_sem_decimal(linha.get('municipio'))
             nome_municipio = DE_PARA_MUNICIPIOS.get(codigo_municipio_limpo, codigo_municipio_limpo)
 
-            # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
                 c1, c2, c3, c4, c5 = st.columns(5)
                 with c1: st.text_input("ID (Código)", value=val_id_formatado) 
@@ -461,7 +466,6 @@ with tab3:
                     st.error(f"**Status:** {limpar_dado(linha.get('status'))}")
 
             with st.expander("✂️ Dados do Corte & SLA", expanded=False):
-                # Organização em uma única linha com 5 colunas
                 crt1, crt2, crt3, crt4, crt5 = st.columns(5)
                 with crt1: st.write(f"**Mês Corte:** {limpar_dado(linha.get('mês_corte'))}")
                 with crt2: st.write(f"**Ordem Corte:** {limpar_dado(linha.get('num_ordem_serv_crt'))}")
@@ -482,7 +486,6 @@ with tab3:
             
             with st.form("form_tratativa"):
                 col_e1, col_e2, col_e3 = st.columns(3)
-                # OBS: Adicionamos 'key' única (id_selecionado) para forçar o reset dos campos ao trocar de ID
                 with col_e1:
                     st.markdown("**Análise do Polo**")
                     val_just = linha.get('Justificativa_polo')
@@ -577,10 +580,4 @@ with tab3:
                     total_nao_conforme = df_user[df_user['Conformidade_polo'] == 'Não Conforme'].shape[0]
                     destinatario = "nelio.goncalves@enel.com"
                     assunto = "Justificativas Finalizadas"
-                    corpo = f"Nélio,\nAs justificativas foram finalizadas:\nPolo: {usuario_atual}\nConforme: {total_conforme}\nNão Conforme: {total_nao_conforme}"
-                    params = {"subject": assunto, "body": corpo}
-                    query_string = urllib.parse.urlencode(params).replace("+", "%20")
-                    mailto_link = f"mailto:{destinatario}?{query_string}"
-                    
-                    st.success("Resumo gerado!")
-                    st.markdown(f'<a href="{mailto_link}" target="_blank"><button style="background-color:#4CAF50;color:white;padding:15px;border:none;border-radius:12px;cursor:pointer;">📤 Enviar E-mail</button></a>', unsafe_allow_html=True)
+                    corpo = f"Nélio,\nAs justificativas foram finalizadas:\nPolo: {usuario_atual}\nConforme: {total_conforme}\nNão Conforme
