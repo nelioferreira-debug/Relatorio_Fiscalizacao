@@ -241,7 +241,7 @@ with tab1:
     with g1:
         # Gráfico 1: Classificação (Pizza)
         if 'classificacao' in df.columns:
-            st.caption("Conformidade")
+            st.caption("Conformidade_polo")
             df_class = df['classificacao'].value_counts().reset_index()
             df_class.columns = ['Resultado', 'Qtd']
             fig_pizza = px.pie(df_class, values='Qtd', names='Resultado', 
