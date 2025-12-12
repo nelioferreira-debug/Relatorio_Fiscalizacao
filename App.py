@@ -171,7 +171,7 @@ with tab3:
             # Cálculo de Datas
             diferenca_texto = "-"
             data_exec_completa = "-"
-            data_solic_formatada = "-" # Nova variável para data formatada
+            data_solic_formatada = "-" 
 
             try:
                 dt_solic = pd.to_datetime(linha.get('data_solic_corte'), dayfirst=True, errors='coerce')
@@ -187,7 +187,6 @@ with tab3:
                         data_exec_completa = dt_exec.strftime("%d/%m/%Y %H:%M:%S")
                     if pd.notna(dt_solic) and pd.notna(dt_exec):
                         delta = dt_exec - dt_solic
-                        # Tradução simples de 'days' para 'dias'
                         diferenca_texto = str(delta).replace("days", "dias").replace("day", "dia")
             except Exception:
                 diferenca_texto = "Erro no cálculo"
@@ -208,6 +207,12 @@ with tab3:
                     return str(int(float(valor)))
                 except:
                     return str(valor)
+
+            # --- FUNÇÃO NOVA PARA LIMPEZA DE INPUTS (Evita "nan") ---
+            def limpar_input_edicao(valor):
+                if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
+                    return ""
+                return str(valor)
 
             val_id_formatado = formatar_sem_decimal(linha.get('ID'))
             val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
@@ -254,7 +259,7 @@ with tab3:
                 t1, t2, t3 = st.columns(3)
                 with t1:
                     st.write("**Data Solicitação:**")
-                    st.write(data_solic_formatada) # Data formatada
+                    st.write(data_solic_formatada) 
                 with t2:
                     st.write("**Data Execução (Final):**")
                     st.write(data_exec_completa)
@@ -289,11 +294,18 @@ with tab3:
                     val_sancao = linha.get('SANÇÃO')
                     idx_sancao = OPCOES_SANCAO.index(val_sancao) if val_sancao in OPCOES_SANCAO else 0
                     nova_sancao = st.selectbox("Sanção", OPCOES_SANCAO, index=idx_sancao)
-                    novo_valor = st.text_input("Valor (R$)", value=str(linha.get('VALOR', '')))
+                    
+                    # AQUI A MÁGICA: Usamos a função de limpeza para evitar "nan"
+                    val_valor_limpo = limpar_input_edicao(linha.get('VALOR'))
+                    novo_valor = st.text_input("Valor (R$)", value=val_valor_limpo)
+                    
                     val_multa = linha.get('MULTA?')
                     idx_multa = OPCOES_MULTA.index(val_multa) if val_multa in OPCOES_MULTA else 0
                     nova_multa = st.selectbox("Multa?", OPCOES_MULTA, index=idx_multa)
-                    novo_valor_multa = st.text_input("Valor Multa (R$)", value=str(linha.get('VALOR MULTA', '')))
+                    
+                    # AQUI A MÁGICA TAMBÉM
+                    val_valor_multa_limpo = limpar_input_edicao(linha.get('VALOR MULTA'))
+                    novo_valor_multa = st.text_input("Valor Multa (R$)", value=val_valor_multa_limpo)
 
                 st.markdown("---")
                 if st.form_submit_button("💾 Salvar Tratativa Completa", type="primary"):
