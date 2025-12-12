@@ -439,7 +439,20 @@ with tab3:
     if df_user.empty:
         st.info("Nenhuma ordem para exibir.")
     else:
-        lista_ids = df_user['ID'].unique().tolist()
+        # --- ORDENAÇÃO INTELIGENTE DA LISTA ---
+        # 1. Copia o dataframe para não bagunçar
+        df_ordenado = df_user.copy()
+        
+        # 2. Cria coluna de prioridade (0 = Pendente, 1 = Preenchido)
+        if 'Justificativa_polo' in df_ordenado.columns:
+            df_ordenado['_prioridade'] = df_ordenado['Justificativa_polo'].apply(
+                lambda x: 0 if pd.isna(x) or str(x).strip() == "" else 1
+            )
+            # 3. Ordena: Pendentes (0) primeiro
+            df_ordenado = df_ordenado.sort_values(by='_prioridade', ascending=True)
+        
+        # 4. Gera a lista de IDs baseada nessa ordem
+        lista_ids = df_ordenado['ID'].unique().tolist()
         
         if 'indice_navegacao' not in st.session_state:
             st.session_state['indice_navegacao'] = 0
