@@ -112,7 +112,7 @@ def limpar_input_edicao(valor):
         return ""
     return str(valor)
 
-# --- TELA DE LOGIN ---
+# --- TELA DE LOGIN (OTIMIZADA) ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
@@ -239,16 +239,16 @@ with tab1:
     else:
         df_dates = pd.DataFrame()
 
-    # Layout em Linha Única
-    g1, g2, g3, g4 = st.columns(4)
-    
     # Cores Enel
     azul_enel = '#00549F'
     azul_claro = '#4093D6'
     laranja = '#FFA500'
+
+    # --- LINHA 1 DE GRÁFICOS (3 Colunas) ---
+    g1, g2, g3 = st.columns(3)
     
     with g1:
-        # Gráfico 1: Área Chart (Evolução Diária) - Mais fluido
+        # Gráfico 1: Área Chart (Evolução Diária)
         if not df_dates.empty:
             st.caption("Evolução Diária")
             df_dia = df_dates['dt_exec'].value_counts().reset_index()
@@ -257,18 +257,17 @@ with tab1:
             
             fig_dia = px.area(df_dia, x='Data', y='Qtd', 
                             color_discrete_sequence=[azul_enel])
-            fig_dia.update_layout(yaxis_visible=False, xaxis_title=None, margin=dict(t=10, b=0, l=0, r=0))
+            fig_dia.update_layout(yaxis_visible=False, xaxis_title=None, margin=dict(t=10, b=0, l=0, r=0), height=320)
             st.plotly_chart(fig_dia, use_container_width=True)
             
     with g2:
-        # Gráfico 2: Radar Chart (Dias da Semana) - Diferenciado
+        # Gráfico 2: Radar Chart (Dias da Semana)
         if not df_dates.empty:
             st.caption("Ciclo Semanal")
             daily_counts = df_dates.groupby('dt_exec').size().reset_index(name='count')
             daily_counts['day_name'] = daily_counts['dt_exec'].dt.day_name()
             avg_dow = daily_counts.groupby('day_name')['count'].mean().reset_index()
             
-            # Ordenar dias
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             days_pt = {'Monday': 'Seg', 'Tuesday': 'Ter', 'Wednesday': 'Qua', 'Thursday': 'Qui', 'Friday': 'Sex', 'Saturday': 'Sab', 'Sunday': 'Dom'}
             
@@ -279,43 +278,30 @@ with tab1:
             fig_radar = px.line_polar(avg_dow, r='count', theta='day_label', line_close=True,
                                     color_discrete_sequence=[laranja])
             fig_radar.update_traces(fill='toself')
-            fig_radar.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+            fig_radar.update_layout(margin=dict(t=20, b=20, l=20, r=20), height=320)
             st.plotly_chart(fig_radar, use_container_width=True)
 
     with g3:
-        # Gráfico 3: Treemap (Tipo de Corte) - Melhor visualização de proporção
-        if 'Tipo_corte' in df.columns:
-            st.caption("Proporção por Tipo de Corte")
-            df_tipo = df['Tipo_corte'].value_counts().reset_index()
-            df_tipo.columns = ['Tipo', 'Qtd']
-            
-            fig_tree = px.treemap(df_tipo, path=['Tipo'], values='Qtd',
-                                color='Qtd', color_continuous_scale='Blues')
-            fig_tree.update_layout(margin=dict(t=0, b=0, l=0, r=0))
-            st.plotly_chart(fig_tree, use_container_width=True)
-
-    with g4:
-        # Gráfico 4: Donut Chart (Grupo) - Mais elegante que barras
+        # Gráfico 3: Donut Chart (Grupo) - Movido para cá
         if 'grupo' in df.columns:
             st.caption("Grupo de Serviço")
             df_grupo = df['grupo'].value_counts().reset_index()
             df_grupo.columns = ['Grupo', 'Qtd']
             fig_donut = px.pie(df_grupo, values='Qtd', names='Grupo', hole=0.6,
                              color_discrete_sequence=px.colors.sequential.Blues_r)
-            fig_donut.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
-            # Adiciona info no meio
+            fig_donut.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=320)
             fig_donut.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig_donut, use_container_width=True)
 
     st.markdown("<h3 style='color: #00549F;'>🏆 Performance dos Polos</h3>", unsafe_allow_html=True)
     
-    p1, p2 = st.columns(2)
+    # --- LINHA 2 DE GRÁFICOS (3 Colunas) ---
+    p1, p2, p3 = st.columns(3)
 
     with p1:
-        # Gráfico 5: Barras Empilhadas (Volume Concluído vs Pendente)
+        # Gráfico 4: Barras Empilhadas (Status de Entrega)
         if 'polo' in df.columns and 'Justificativa_polo' in df.columns:
             st.caption("Status de Entrega por Polo")
-            # Prepara dados para empilhado
             df_stack = df.copy()
             df_stack['Status'] = df_stack['Justificativa_polo'].apply(lambda x: 'Concluído' if pd.notna(x) and x != "" else 'Pendente')
             
@@ -325,31 +311,13 @@ with tab1:
                              color_discrete_map={'Concluído': azul_enel, 'Pendente': '#D3D3D3'},
                              text='Qtd')
             
-            fig_stack.update_layout(xaxis_visible=False, legend_title=None, margin=dict(t=0, b=0, l=0, r=0))
+            fig_stack.update_layout(xaxis_visible=False, legend_title=None, margin=dict(t=0, b=0, l=0, r=0), height=320)
             st.plotly_chart(fig_stack, use_container_width=True)
 
     with p2:
-        # Gráfico 6: Matriz de Eficiência (Scatter Plot) - Volume x % Conclusão
-        if 'polo' in df.columns:
-            st.caption("Matriz de Eficiência (Volume x % Conclusão)")
-            df_matrix = df.groupby('polo').agg(
-                Volume=('ID', 'count'),
-                Concluidos=('Justificativa_polo', lambda x: x[x != ""].count())
-            ).reset_index()
-            df_matrix['Percentual'] = (df_matrix['Concluidos'] / df_matrix['Volume']) * 100
-            
-            fig_matrix = px.scatter(df_matrix, x='Volume', y='Percentual', text='polo', size='Volume',
-                                  color='Percentual', color_continuous_scale='Bluyl')
-            
-            fig_matrix.update_traces(textposition='top center')
-            fig_matrix.update_layout(xaxis_title="Volume Total", yaxis_title="% Conclusão")
-            st.plotly_chart(fig_matrix, use_container_width=True)
-
-    p3, p4 = st.columns(2)
-
-    with p3:
-        # Gráfico 7: Pareto (Mantido, mas estilizado)
+        # Gráfico 5: Pareto (Não Conformidades) - Movido para cá
         if 'polo' in df.columns and 'classificacao' in df.columns:
+            st.caption("Pareto de Não Conformidades")
             df_nc = df[df['classificacao'].astype(str) == 'Não Conforme']
             df_nc_polo = df_nc['polo'].value_counts().reset_index()
             df_nc_polo.columns = ['Polo', 'Qtd']
@@ -361,15 +329,14 @@ with tab1:
             fig_nc.add_trace(go.Scatter(x=df_nc_polo['Polo'], y=df_nc_polo['perc_acum'], name='% Acum', yaxis='y2', line=dict(color=azul_enel, width=3)))
             
             fig_nc.update_layout(
-                title="Pareto de Não Conformidades",
                 yaxis=dict(showgrid=False, visible=False),
                 yaxis2=dict(overlaying='y', side='right', showgrid=False, range=[0, 110], visible=False),
-                showlegend=False, margin=dict(t=30, b=0, l=0, r=0)
+                showlegend=False, margin=dict(t=10, b=0, l=0, r=0), height=320
             )
             st.plotly_chart(fig_nc, use_container_width=True)
 
-    with p4:
-        # Gráfico 8: Dot Plot para SLA (Visual mais limpo que barras)
+    with p3:
+        # Gráfico 6: Dot Plot (SLA) - Movido para cá
         if 'polo' in df.columns and 'data_exec_corte' in df.columns and 'data_solic_corte' in df.columns:
             st.caption("Tempo Médio de Atendimento (SLA)")
             df_sla = df.copy()
@@ -384,7 +351,7 @@ with tab1:
             fig_sla = px.scatter(df_sla_polo, x='Média Dias', y='Polo', text=df_sla_polo['Média Dias'].apply(lambda x: f'{x:.1f}d'),
                                color_discrete_sequence=[azul_claro])
             fig_sla.update_traces(marker=dict(size=12), textposition='middle right')
-            fig_sla.update_layout(xaxis_visible=False, margin=dict(t=0, b=0, l=0, r=0))
+            fig_sla.update_layout(xaxis_visible=False, margin=dict(t=0, b=0, l=0, r=0), height=320)
             st.plotly_chart(fig_sla, use_container_width=True)
 
 # --- ABA 2: MEU POLO ---
