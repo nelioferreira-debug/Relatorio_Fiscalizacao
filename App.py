@@ -77,8 +77,41 @@ OPCOES_MULTA = ["", "SIM", "NÃO", "EM ANDAMENTO"]
 def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Dados", ttl=0)
+    
     if 'ID' in df.columns:
         df['ID'] = df['ID'].astype(str).str.replace(r'\.0$', '', regex=True)
+    
+    # --- LÓGICA DE LIMPEZA DE DUPLICATAS ---
+    # Parâmetros para identificar duplicidade
+    colunas_chave = ['ID', 'numero_cliente', 'num_ordem_serv_crt']
+    
+    # Verifica se as colunas existem na planilha
+    if all(col in df.columns for col in colunas_chave):
+        qtd_antes = len(df)
+        
+        # Cria uma coluna temporária para priorizar quem tem justificativa
+        # Se 'Justificativa_polo' não for vazia, ganha peso 1, senão 0
+        if 'Justificativa_polo' in df.columns:
+            df['_tem_justificativa'] = df['Justificativa_polo'].apply(lambda x: 1 if pd.notna(x) and str(x).strip() != "" else 0)
+            
+            # Ordena: 1º quem tem justificativa, 2º quem não tem
+            df = df.sort_values(by='_tem_justificativa', ascending=False)
+            
+            # Remove duplicatas mantendo a primeira (que é a justificada, se houver)
+            df = df.drop_duplicates(subset=colunas_chave, keep='first')
+            
+            # Remove a coluna auxiliar
+            df = df.drop(columns=['_tem_justificativa'])
+        else:
+            # Se não existir a coluna de justificativa, remove simples
+            df = df.drop_duplicates(subset=colunas_chave, keep='first')
+            
+        qtd_depois = len(df)
+        
+        # Salva na sessão se houve remoção para avisar no dashboard
+        if qtd_antes > qtd_depois:
+            st.session_state['msg_limpeza'] = f"🧹 O sistema removeu automaticamente {qtd_antes - qtd_depois} linhas duplicadas sem justificativa."
+    
     return df, conn
 
 def salvar_dados(conn, df):
@@ -160,6 +193,12 @@ tab1, tab2, tab3 = st.tabs(["📊 Visão Geral (Dashboard)", "🏢 Meu Polo", "�
 
 # --- ABA 1: DASHBOARD EXECUTIVO ---
 with tab1:
+    # Aviso de limpeza de duplicatas (se houver)
+    if 'msg_limpeza' in st.session_state:
+        st.warning(st.session_state['msg_limpeza'])
+        # Limpa a mensagem após exibir para não ficar eterna
+        del st.session_state['msg_limpeza']
+
     # Identidade Visual (Azul Enel)
     st.markdown("""
         <style>
