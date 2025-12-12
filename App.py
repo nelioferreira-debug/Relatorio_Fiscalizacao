@@ -177,6 +177,7 @@ with tab1:
 
     # Métricas Principais
     total_ordens = len(df)
+    # Considera tratado se o campo Justificativa_polo não estiver vazio
     tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
@@ -193,19 +194,14 @@ with tab1:
     else:
         perc_lacre = 0
 
-    # OTIMIZAÇÃO MOBILE: Dividir as 6 métricas em 2 linhas de 3
-    # Isso evita que os números fiquem minusculos no celular
-    row1_m1, row1_m2, row1_m3 = st.columns(3)
-    row1_m1.metric("Total Fiscalizações", total_ordens)
-    row1_m2.metric("Concluídas", tratados_geral, delta=f"{percentual_geral:.1f}%")
-    row1_m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
-    
-    st.markdown("") # Espaço vazio
-
-    row2_m1, row2_m2, row2_m3 = st.columns(6)
-    row2_m1.metric("Dias Restantes", "5", "Estimativa")
-    row2_m2.metric("% Com Lacre", f"{perc_lacre:.1f}%")
-    row2_m3.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
+    # Layout de linha única (6 colunas)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Total Fiscalizações", total_ordens)
+    m2.metric("Concluídas", tratados_geral, delta=f"{percentual_geral:.1f}%")
+    m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
+    m4.metric("Dias Restantes", "5", "Estimativa")
+    m5.metric("% Com Lacre", f"{perc_lacre:.1f}%")
+    m6.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
 
     st.markdown("---")
     st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
