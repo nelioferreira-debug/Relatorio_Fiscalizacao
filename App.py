@@ -359,20 +359,13 @@ with tab3:
                     st.error(f"**Status:** {limpar_dado(linha.get('status'))}")
 
             with st.expander("✂️ Dados do Corte & SLA", expanded=False):
-                # Organização conforme pedido:
-                # Linha 1: Mês Corte, Ordem Corte
-                # Linha 2: Descrição
-                # Linha 3: Tipo Corte, Grupo
-                
-                crt1, crt2 = st.columns(2)
+                # Organização em uma única linha com 5 colunas
+                crt1, crt2, crt3, crt4, crt5 = st.columns(5)
                 with crt1: st.write(f"**Mês Corte:** {limpar_dado(linha.get('mês_corte'))}")
                 with crt2: st.write(f"**Ordem Corte:** {limpar_dado(linha.get('num_ordem_serv_crt'))}")
-                
-                st.write(f"**Descrição:** {limpar_dado(linha.get('descricao_tipo'))}")
-                
-                crt3, crt4 = st.columns(2)
-                with crt3: st.write(f"**Tipo Corte:** {limpar_dado(linha.get('Tipo_corte'))}")
-                with crt4: st.write(f"**Grupo:** {limpar_dado(linha.get('grupo'))}")
+                with crt3: st.write(f"**Descrição:** {limpar_dado(linha.get('descricao_tipo'))}")
+                with crt4: st.write(f"**Tipo Corte:** {limpar_dado(linha.get('Tipo_corte'))}")
+                with crt5: st.write(f"**Grupo:** {limpar_dado(linha.get('grupo'))}")
 
                 st.markdown("#### ⏳ Análise de Tempo")
                 # Padronizando os inputs para ficar igual ao "Dados do Cliente"
