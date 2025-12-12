@@ -81,37 +81,7 @@ def carregar_dados():
     if 'ID' in df.columns:
         df['ID'] = df['ID'].astype(str).str.replace(r'\.0$', '', regex=True)
     
-    # --- LÓGICA DE LIMPEZA DE DUPLICATAS ---
-    # Parâmetros para identificar duplicidade
-    colunas_chave = ['ID', 'numero_cliente', 'num_ordem_serv_crt']
-    
-    # Verifica se as colunas existem na planilha
-    if all(col in df.columns for col in colunas_chave):
-        qtd_antes = len(df)
-        
-        # Cria uma coluna temporária para priorizar quem tem justificativa
-        # Se 'Justificativa_polo' não for vazia, ganha peso 1, senão 0
-        if 'Justificativa_polo' in df.columns:
-            df['_tem_justificativa'] = df['Justificativa_polo'].apply(lambda x: 1 if pd.notna(x) and str(x).strip() != "" else 0)
-            
-            # Ordena: 1º quem tem justificativa, 2º quem não tem
-            df = df.sort_values(by='_tem_justificativa', ascending=False)
-            
-            # Remove duplicatas mantendo a primeira (que é a justificada, se houver)
-            df = df.drop_duplicates(subset=colunas_chave, keep='first')
-            
-            # Remove a coluna auxiliar
-            df = df.drop(columns=['_tem_justificativa'])
-        else:
-            # Se não existir a coluna de justificativa, remove simples
-            df = df.drop_duplicates(subset=colunas_chave, keep='first')
-            
-        qtd_depois = len(df)
-        
-        # Salva na sessão se houve remoção para avisar no dashboard
-        if qtd_antes > qtd_depois:
-            st.session_state['msg_limpeza'] = f"🧹 O sistema removeu automaticamente {qtd_antes - qtd_depois} linhas duplicadas sem justificativa."
-    
+    # A limpeza automática foi removida daqui para ser gerida via botão no Dashboard
     return df, conn
 
 def salvar_dados(conn, df):
@@ -193,11 +163,38 @@ tab1, tab2, tab3 = st.tabs(["📊 Visão Geral (Dashboard)", "🏢 Meu Polo", "�
 
 # --- ABA 1: DASHBOARD EXECUTIVO ---
 with tab1:
-    # Aviso de limpeza de duplicatas (se houver)
-    if 'msg_limpeza' in st.session_state:
-        st.warning(st.session_state['msg_limpeza'])
-        # Limpa a mensagem após exibir para não ficar eterna
-        del st.session_state['msg_limpeza']
+    # --- SISTEMA DE DETEÇÃO DE DUPLICATAS (COM BOTÃO) ---
+    colunas_chave = ['ID', 'numero_cliente', 'num_ordem_serv_crt']
+    if all(col in df.columns for col in colunas_chave):
+        df_analise = df.copy()
+        
+        # 1. Prioriza linhas que já têm justificativa preenchida
+        if 'Justificativa_polo' in df_analise.columns:
+            df_analise['_tem_justificativa'] = df_analise['Justificativa_polo'].apply(lambda x: 1 if pd.notna(x) and str(x).strip() != "" else 0)
+            df_analise = df_analise.sort_values(by='_tem_justificativa', ascending=False)
+        
+        # 2. Simula a remoção para ver quantas sobrariam
+        df_sem_duplicatas = df_analise.drop_duplicates(subset=colunas_chave, keep='first')
+        
+        # Remove a coluna auxiliar se ela existir
+        if '_tem_justificativa' in df_sem_duplicatas.columns:
+            df_sem_duplicatas = df_sem_duplicatas.drop(columns=['_tem_justificativa'])
+            
+        qtd_duplicatas = len(df) - len(df_sem_duplicatas)
+
+        if qtd_duplicatas > 0:
+            # Layout do Alerta + Botão
+            aviso_col1, aviso_col2 = st.columns([3, 1])
+            with aviso_col1:
+                st.warning(f"⚠️ **Atenção:** Detectamos **{qtd_duplicatas}** registros duplicados na base de dados.")
+            with aviso_col2:
+                if st.button("🗑️ Excluir Duplicadas", type="primary", use_container_width=True):
+                    # Ação Real: Salva a versão limpa no Google Sheets
+                    sucesso = salvar_dados(conn, df_sem_duplicatas)
+                    if sucesso:
+                        st.toast(f"✅ {qtd_duplicatas} linhas removidas com sucesso!", icon="🧹")
+                        time.sleep(1.5)
+                        st.rerun()
 
     # Identidade Visual (Azul Enel)
     st.markdown("""
