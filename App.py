@@ -202,7 +202,7 @@ with tab1:
     
     st.markdown("") # Espaço vazio
 
-    row2_m1, row2_m2, row2_m3 = st.columns(3)
+    row2_m1, row2_m2, row2_m3 = st.columns(6)
     row2_m1.metric("Dias Restantes", "5", "Estimativa")
     row2_m2.metric("% Com Lacre", f"{perc_lacre:.1f}%")
     row2_m3.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
