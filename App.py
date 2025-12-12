@@ -108,7 +108,7 @@ if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
 if not st.session_state['logado']:
-    st.markdown("<h1 style='text-align: center;'>⚡ SGF - Login</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #00549F;'>⚡ SGF - Login</h1>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         with st.form("login"):
@@ -150,7 +150,19 @@ tab1, tab2, tab3 = st.tabs(["📊 Visão Geral (Dashboard)", "🏢 Meu Polo", "�
 
 # --- ABA 1: DASHBOARD EXECUTIVO ---
 with tab1:
-    st.header("📊 Dashboard Executivo de Fiscalização")
+    # Identidade Visual (Azul Enel)
+    st.markdown("""
+        <style>
+        .stMetric {
+            background-color: #f0f2f6;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 5px solid #00549F;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h2 style='color: #00549F;'>📊 Dashboard Executivo de Fiscalização</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
     # Métricas Principais
@@ -160,26 +172,47 @@ with tab1:
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Fiscalizações", total_ordens)
-    m2.metric("Concluídas (Justificadas)", tratados_geral, delta=f"{percentual_geral:.1f}%")
-    m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
-    m4.metric("Dias Restantes (Mês)", "5", "Estimativa") # Exemplo fixo, poderia ser dinâmico
+    # Cálculo % Autoreligado
+    if 'Estado de Fornecimento' in df.columns:
+        qtd_autoreligado = df[df['Estado de Fornecimento'].astype(str).str.lower() == 'autoreligado'].shape[0]
+        perc_autoreligado = (qtd_autoreligado / total_ordens * 100) if total_ordens > 0 else 0
+    else:
+        perc_autoreligado = 0
 
-    st.markdown("### 🔎 Focos da Fiscalização")
+    # Cálculo % com Lacre (Conta o que NÃO é "Sem lacre" ou "Sem condições")
+    if 'Instalação do Lacre' in df.columns:
+        qtd_com_lacre = df[~df['Instalação do Lacre'].astype(str).str.lower().str.contains('sem', na=True)].shape[0]
+        perc_lacre = (qtd_com_lacre / total_ordens * 100) if total_ordens > 0 else 0
+    else:
+        perc_lacre = 0
+
+    # Exibição das Métricas em 6 colunas
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Total Fiscalizações", total_ordens)
+    m2.metric("Concluídas", tratados_geral, delta=f"{percentual_geral:.1f}%")
+    m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
+    m4.metric("Dias Restantes", "5", "Estimativa")
+    m5.metric("% Com Lacre", f"{perc_lacre:.1f}%")
+    m6.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
+
+    st.markdown("---")
+    st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
     
     # Linha 1 de Gráficos: Resultado e Tipos
     g1, g2 = st.columns(2)
     
+    # Cores personalizadas (Azul e Cinza/Laranja)
+    cores_pizza = ['#00549F', '#A0A0A0', '#FFA500']
+    cores_barras = ['#00549F', '#0072C6', '#4093D6', '#7EB1E3', '#B8D0F0']
+
     with g1:
         # Gráfico de Pizza: Classificação (Conforme vs Não Conforme)
         if 'classificacao' in df.columns:
             st.caption("Distribuição por Resultado (Conformidade)")
-            # Agrupa e conta
             df_class = df['classificacao'].value_counts().reset_index()
             df_class.columns = ['Resultado', 'Qtd']
             fig_pizza = px.pie(df_class, values='Qtd', names='Resultado', 
-                             color_discrete_sequence=px.colors.sequential.RdBu,
+                             color_discrete_sequence=cores_pizza,
                              hole=0.4)
             st.plotly_chart(fig_pizza, use_container_width=True)
             
@@ -190,34 +223,47 @@ with tab1:
             df_status = df['status'].value_counts().head(5).reset_index()
             df_status.columns = ['Tipo Divergência', 'Qtd']
             fig_bar = px.bar(df_status, x='Qtd', y='Tipo Divergência', orientation='h',
-                           color='Qtd', color_continuous_scale='Reds')
-            fig_bar.update_layout(yaxis={'categoryorder':'total ascending'}) # Ordena barras
+                           color='Qtd', color_continuous_scale='Blues')
+            fig_bar.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig_bar, use_container_width=True)
 
-    st.markdown("### 🏆 Performance de Preenchimento dos Polos")
+    st.markdown("<h3 style='color: #00549F;'>🏆 Performance dos Polos</h3>", unsafe_allow_html=True)
     
-    # Gráfico de Preenchimento por Polo
-    if 'polo' in df.columns:
-        # Cria tabela dinâmica: conta total e conta preenchidos por polo
-        df_polo_stats = df.groupby('polo').agg(
-            Total=('ID', 'count'),
-            Preenchidos=('Justificativa_polo', lambda x: x[x != ""].count())
-        ).reset_index()
-        
-        # Calcula %
-        df_polo_stats['Percentual'] = (df_polo_stats['Preenchidos'] / df_polo_stats['Total']) * 100
-        df_polo_stats = df_polo_stats.sort_values('Percentual', ascending=True) # Ordena para o gráfico
+    # Linha 2 de Gráficos: Volume e Eficiência
+    p1, p2 = st.columns(2)
 
-        fig_perf = px.bar(df_polo_stats, x='Percentual', y='polo', orientation='h',
-                        text=df_polo_stats['Percentual'].apply(lambda x: f'{x:.1f}%'),
-                        title="Ranking de Conclusão das Justificativas (%)",
-                        labels={'Percentual': '% Concluído', 'polo': 'Polo'},
-                        color='Percentual', color_continuous_scale='Bluyl')
-        
-        fig_perf.update_traces(textposition='outside')
-        fig_perf.update_layout(xaxis_range=[0, 110]) # Dá espaço para o texto
-        
-        st.plotly_chart(fig_perf, use_container_width=True)
+    with p1:
+        # Gráfico: Volume Total por Polo
+        if 'polo' in df.columns:
+            df_polo_vol = df['polo'].value_counts().reset_index()
+            df_polo_vol.columns = ['Polo', 'Total']
+            df_polo_vol = df_polo_vol.sort_values('Total', ascending=True)
+            
+            fig_vol = px.bar(df_polo_vol, x='Total', y='Polo', orientation='h',
+                           text='Total', title="Volume de Fiscalizações por Polo",
+                           color_discrete_sequence=['#00549F'])
+            fig_vol.update_traces(textposition='outside')
+            st.plotly_chart(fig_vol, use_container_width=True)
+
+    with p2:
+        # Gráfico: % de Conclusão por Polo
+        if 'polo' in df.columns:
+            df_polo_stats = df.groupby('polo').agg(
+                Total=('ID', 'count'),
+                Preenchidos=('Justificativa_polo', lambda x: x[x != ""].count())
+            ).reset_index()
+            
+            df_polo_stats['Percentual'] = (df_polo_stats['Preenchidos'] / df_polo_stats['Total']) * 100
+            df_polo_stats = df_polo_stats.sort_values('Percentual', ascending=True)
+
+            fig_perf = px.bar(df_polo_stats, x='Percentual', y='polo', orientation='h',
+                            text=df_polo_stats['Percentual'].apply(lambda x: f'{x:.1f}%'),
+                            title="Ranking de Conclusão (%)",
+                            color_discrete_sequence=['#4093D6'])
+            
+            fig_perf.update_traces(textposition='outside')
+            fig_perf.update_layout(xaxis_range=[0, 115]) 
+            st.plotly_chart(fig_perf, use_container_width=True)
 
 # --- ABA 2: MEU POLO ---
 with tab2:
@@ -334,6 +380,7 @@ with tab3:
             
             with st.form("form_tratativa"):
                 col_e1, col_e2, col_e3 = st.columns(3)
+                # OBS: Adicionamos 'key' única (id_selecionado) para forçar o reset dos campos ao trocar de ID
                 with col_e1:
                     st.markdown("**Análise do Polo**")
                     val_just = linha.get('Justificativa_polo')
