@@ -211,12 +211,12 @@ with tab3:
 
             # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5) # Mudança para 5 colunas
                 with c1: st.text_input("ID (Código)", value=val_id_formatado) 
                 with c2: st.text_input("Cliente", value=val_cliente_formatado)
                 with c3: st.text_input("Polo", value=limpar_dado(linha.get('polo')), disabled=True)
                 with c4: st.text_input("Município", value=nome_municipio, disabled=True)
-                st.text_input("Descrição Rede", value=limpar_dado(linha.get('desc_rede')), disabled=True)
+                with c5: st.text_input("Descrição Rede", value=limpar_dado(linha.get('desc_rede')), disabled=True)
 
             with st.expander("🔎 Detalhes da Fiscalização (Foco)", expanded=False):
                 f1, f2, f3 = st.columns(3)
