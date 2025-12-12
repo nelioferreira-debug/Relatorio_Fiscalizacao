@@ -171,8 +171,13 @@ with tab3:
             # Cálculo de Datas
             diferenca_texto = "-"
             data_exec_completa = "-"
+            data_solic_formatada = "-" # Nova variável para data formatada
+
             try:
                 dt_solic = pd.to_datetime(linha.get('data_solic_corte'), dayfirst=True, errors='coerce')
+                if pd.notna(dt_solic):
+                    data_solic_formatada = dt_solic.strftime("%d/%m/%Y")
+
                 str_data_exec = str(linha.get('data_exec_corte', ''))
                 str_hora_exec = str(linha.get('hora_exec_corte', ''))
                 if str_data_exec != 'nan' and str_data_exec != '':
@@ -182,19 +187,20 @@ with tab3:
                         data_exec_completa = dt_exec.strftime("%d/%m/%Y %H:%M:%S")
                     if pd.notna(dt_solic) and pd.notna(dt_exec):
                         delta = dt_exec - dt_solic
-                        diferenca_texto = str(delta)
+                        # Tradução simples de 'days' para 'dias'
+                        diferenca_texto = str(delta).replace("days", "dias").replace("day", "dia")
             except Exception:
                 diferenca_texto = "Erro no cálculo"
 
             st.markdown("---")
             
-            # --- FUNÇÃO PARA LIMPEZA GERAL (Substitui vazio por "-") ---
+            # --- FUNÇÃO PARA LIMPEZA GERAL ---
             def limpar_dado(valor):
                 if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
                     return "-"
                 return str(valor)
 
-            # --- FUNÇÃO PARA REMOVER CASAS DECIMAIS VISUAIS ---
+            # --- FUNÇÃO PARA REMOVER CASAS DECIMAIS ---
             def formatar_sem_decimal(valor):
                 try:
                     if pd.isna(valor) or str(valor).strip() == '':
@@ -203,7 +209,6 @@ with tab3:
                 except:
                     return str(valor)
 
-            # Aplica formatações
             val_id_formatado = formatar_sem_decimal(linha.get('ID'))
             val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
             codigo_municipio_limpo = formatar_sem_decimal(linha.get('municipio'))
@@ -211,7 +216,7 @@ with tab3:
 
             # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
-                c1, c2, c3, c4, c5 = st.columns(5) # Mudança para 5 colunas
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1: st.text_input("ID (Código)", value=val_id_formatado) 
                 with c2: st.text_input("Cliente", value=val_cliente_formatado)
                 with c3: st.text_input("Polo", value=limpar_dado(linha.get('polo')), disabled=True)
@@ -233,11 +238,8 @@ with tab3:
                     st.write(f"**UC Habitada:** {limpar_dado(linha.get('UC Habitada?'))}")
                     st.write(f"**Fornecimento:** {limpar_dado(linha.get('Estado de Fornecimento'))}")
                 with f3:
-                    # Trâmite e Retorno em AZUL (st.info)
                     st.info(f"**Trâmite:** {limpar_dado(linha.get('tramite'))}")
                     st.info(f"**Retorno:** {limpar_dado(linha.get('retorno'))}")
-                    
-                    # Classificação e Status em VERMELHO (st.error)
                     st.error(f"**Classificação:** {limpar_dado(linha.get('classificacao'))}")
                     st.error(f"**Status:** {limpar_dado(linha.get('status'))}")
 
@@ -252,7 +254,7 @@ with tab3:
                 t1, t2, t3 = st.columns(3)
                 with t1:
                     st.write("**Data Solicitação:**")
-                    st.write(limpar_dado(linha.get('data_solic_corte')))
+                    st.write(data_solic_formatada) # Data formatada
                 with t2:
                     st.write("**Data Execução (Final):**")
                     st.write(data_exec_completa)
