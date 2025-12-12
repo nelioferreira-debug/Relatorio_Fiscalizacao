@@ -162,15 +162,12 @@ with tab3:
         lista_ids = df_user['ID'].unique().tolist()
         
         # --- LÓGICA DE NAVEGAÇÃO SEGURA ---
-        # Se não existir o índice na memória, cria começando do zero
         if 'indice_navegacao' not in st.session_state:
             st.session_state['indice_navegacao'] = 0
             
-        # Garante que o índice não estourou o tamanho da lista (caso a lista diminua)
         if st.session_state['indice_navegacao'] >= len(lista_ids):
              st.session_state['indice_navegacao'] = 0
 
-        # O selectbox agora é controlado pelo 'index', sem usar 'key' conflitante
         id_selecionado = st.selectbox("Pesquise o ID da Ordem:", lista_ids, index=st.session_state['indice_navegacao'])
         
         mascara = df['ID'] == id_selecionado
@@ -281,40 +278,43 @@ with tab3:
             
             with st.form("form_tratativa"):
                 col_e1, col_e2, col_e3 = st.columns(3)
+                # OBS: Adicionamos 'key' única (id_selecionado) para forçar o reset dos campos ao trocar de ID
                 with col_e1:
                     st.markdown("**Análise do Polo**")
                     val_just = linha.get('Justificativa_polo')
                     idx_just = OPCOES_JUSTIFICATIVA.index(val_just) if val_just in OPCOES_JUSTIFICATIVA else 0
-                    nova_just = st.selectbox("Justificativa", OPCOES_JUSTIFICATIVA, index=idx_just)
+                    nova_just = st.selectbox("Justificativa", OPCOES_JUSTIFICATIVA, index=idx_just, key=f"just_{id_selecionado}")
                     val_obs = linha.get('Obs_polo')
                     idx_obs = OPCOES_OBS.index(val_obs) if val_obs in OPCOES_OBS else 0
-                    nova_obs = st.selectbox("Observação", OPCOES_OBS, index=idx_obs)
+                    nova_obs = st.selectbox("Observação", OPCOES_OBS, index=idx_obs, key=f"obs_{id_selecionado}")
 
                 with col_e2:
                     st.markdown("**Conformidade & Notificação**")
                     nova_conf = st.selectbox("Conformidade Polo", ["", "Conforme", "Não Conforme"], 
-                                           index=1 if linha.get('Conformidade_polo') == "Conforme" else 2 if linha.get('Conformidade_polo') == "Não Conforme" else 0)
+                                           index=1 if linha.get('Conformidade_polo') == "Conforme" else 2 if linha.get('Conformidade_polo') == "Não Conforme" else 0,
+                                           key=f"conf_{id_selecionado}")
                     val_grids = linha.get('Conformidade_grids')
                     idx_grids = OPCOES_CONF_GRIDS.index(val_grids) if val_grids in OPCOES_CONF_GRIDS else 0
-                    nova_conf_grids = st.selectbox("Conformidade Grids", OPCOES_CONF_GRIDS, index=idx_grids)
+                    nova_conf_grids = st.selectbox("Conformidade Grids", OPCOES_CONF_GRIDS, index=idx_grids, key=f"grids_{id_selecionado}")
                     nova_notificacao = st.selectbox("Notificação?", ["", "SIM", "NÃO"], 
-                                                  index=1 if linha.get('NOTIFICAÇÃO?') == "SIM" else 2 if linha.get('NOTIFICAÇÃO?') == "NÃO" else 0)
+                                                  index=1 if linha.get('NOTIFICAÇÃO?') == "SIM" else 2 if linha.get('NOTIFICAÇÃO?') == "NÃO" else 0,
+                                                  key=f"notif_{id_selecionado}")
 
                 with col_e3:
                     st.markdown("**Sanções e Multas**")
                     val_sancao = linha.get('SANÇÃO')
                     idx_sancao = OPCOES_SANCAO.index(val_sancao) if val_sancao in OPCOES_SANCAO else 0
-                    nova_sancao = st.selectbox("Sanção", OPCOES_SANCAO, index=idx_sancao)
+                    nova_sancao = st.selectbox("Sanção", OPCOES_SANCAO, index=idx_sancao, key=f"sancao_{id_selecionado}")
                     
                     val_valor_limpo = limpar_input_edicao(linha.get('VALOR'))
-                    novo_valor = st.text_input("Valor (R$)", value=val_valor_limpo)
+                    novo_valor = st.text_input("Valor (R$)", value=val_valor_limpo, key=f"valor_{id_selecionado}")
                     
                     val_multa = linha.get('MULTA?')
                     idx_multa = OPCOES_MULTA.index(val_multa) if val_multa in OPCOES_MULTA else 0
-                    nova_multa = st.selectbox("Multa?", OPCOES_MULTA, index=idx_multa)
+                    nova_multa = st.selectbox("Multa?", OPCOES_MULTA, index=idx_multa, key=f"multa_{id_selecionado}")
                     
                     val_valor_multa_limpo = limpar_input_edicao(linha.get('VALOR MULTA'))
-                    novo_valor_multa = st.text_input("Valor Multa (R$)", value=val_valor_multa_limpo)
+                    novo_valor_multa = st.text_input("Valor Multa (R$)", value=val_valor_multa_limpo, key=f"vmulta_{id_selecionado}")
 
                 st.markdown("---")
                 
@@ -340,23 +340,23 @@ with tab3:
                     
                     sucesso = salvar_dados(conn, df)
                     if sucesso:
-                        st.success("✅ Salvo com sucesso! Carregando próximo...")
-                        
                         # Lógica para avançar automaticamente (SEM MEXER NO WIDGET DIRETAMENTE)
                         try:
                             # Descobre o índice atual na lista que está no seletor
                             idx_atual_lista = lista_ids.index(id_selecionado)
                             
-                            # Se não for o último item, incrementa a variável de controle
+                            # Se não for o último item, incrementa a variável de controle e recarrega
                             if idx_atual_lista + 1 < len(lista_ids):
                                 st.session_state['indice_navegacao'] = idx_atual_lista + 1
+                                st.success("✅ Salvo com sucesso! Carregando próximo...")
+                                time.sleep(1)
+                                st.rerun()
                             else:
-                                st.info("Você chegou ao fim da lista!")
+                                st.success("✅ Salvo! Você chegou ao fim da lista.")
+                                st.balloons()
+                                st.info("🎉 Não há mais pendências nesta lista. Por favor, clique no botão 'Finalizar e Enviar' (📧) acima para notificar a gestão.")
                         except ValueError:
                             pass
-
-                        time.sleep(1)
-                        st.rerun()
 
                 if btn_limpar:
                     colunas_para_limpar = [
@@ -378,10 +378,10 @@ with tab3:
                     total_nao_conforme = df_user[df_user['Conformidade_polo'] == 'Não Conforme'].shape[0]
                     
                     destinatario = "nelio.goncalves@enel.com"
-                    assunto = "Justificativas Finalizadas"
+                    assunto = "[Retorno Polo] - Justificativas Finalizadas"
                     corpo = (
                         f"Nélio,\n"
-                        f"As justificativas dos Retornos das Fiscalizações foram finalizadas:\n\n"
+                        f"As analises sobre os Retornos das Fiscalizações foram finalizadas:\n\n"
                         f"Polo: {usuario_atual}\n"
                         f"Conforme: {total_conforme}\n"
                         f"Não Conforme: {total_nao_conforme}"
