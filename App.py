@@ -171,19 +171,92 @@ with tab3:
             idx = df[mascara].index[0]
             linha = df.loc[idx]
             
+            # --- CÁLCULO DE DATAS E DIFERENÇA ---
+            diferenca_texto = "-"
+            data_exec_completa = "-"
+            
+            try:
+                # Converter Data Solicitação (tenta ler como dia/mês/ano)
+                dt_solic = pd.to_datetime(linha.get('data_solic_corte'), dayfirst=True, errors='coerce')
+                
+                # Montar Data Execução (Data + Hora)
+                str_data_exec = str(linha.get('data_exec_corte', ''))
+                str_hora_exec = str(linha.get('hora_exec_corte', ''))
+                
+                # Junta strings apenas se existirem
+                if str_data_exec != 'nan' and str_data_exec != '':
+                    # Limpeza simples caso venha sujeira
+                    str_completa = f"{str_data_exec} {str_hora_exec}".strip()
+                    dt_exec = pd.to_datetime(str_completa, dayfirst=True, errors='coerce')
+                    
+                    if pd.notna(dt_exec):
+                        data_exec_completa = dt_exec.strftime("%d/%m/%Y %H:%M:%S")
+                    
+                    # Cálculo da Diferença (Execução - Solicitação)
+                    if pd.notna(dt_solic) and pd.notna(dt_exec):
+                        delta = dt_exec - dt_solic
+                        diferenca_texto = str(delta)
+            except Exception as e:
+                diferenca_texto = "Erro no cálculo"
+
             st.markdown("---")
             
-            # Blocos de Informação (Apenas Leitura)
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.info(f"**Cliente:** {linha.get('numero_cliente', '-')}")
-                st.write(f"**Município:** {linha.get('municipio', '-')}")
-            with c2:
-                st.info(f"**Retorno:** {linha.get('retorno', '-')}")
-                st.write(f"**Rede:** {linha.get('desc_rede', '-')}")
-            with c3:
-                st.info(f"**Status:** {linha.get('status', '-')}")
-                st.write(f"**Data:** {linha.get('data_exec_corte', '-')}")
+            # --- VISUALIZAÇÃO DOS DADOS (Blocos Expansíveis) ---
+            
+            # Bloco 1: Dados do Cliente e ID
+            with st.expander("👤 Dados do Cliente & ID", expanded=True):
+                c1, c2, c3, c4 = st.columns(4)
+                with c1: st.text_input("ID (Código)", value=str(linha.get('ID', '-')), disabled=True)
+                with c2: st.text_input("Cliente", value=str(linha.get('numero_cliente', '-')), disabled=True)
+                with c3: st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
+                with c4: st.text_input("Município", value=str(linha.get('municipio', '-')), disabled=True)
+                
+                st.text_input("Descrição Rede", value=str(linha.get('desc_rede', '-')), disabled=True)
+
+            # Bloco 2: Detalhes da Fiscalização
+            with st.expander("🔎 Detalhes da Fiscalização (Foco)", expanded=False):
+                f1, f2, f3 = st.columns(3)
+                with f1:
+                    st.write(f"**Mês Fisc:** {linha.get('mês_fisc', '-')}")
+                    st.write(f"**Data Início:** {linha.get('Hora de início', '-')}")
+                    st.write(f"**Ordem:** {linha.get('Numero Ordem', '-')}")
+                    st.write(f"**Parafuso Seg.:** {linha.get('Possui parafuso de segurança?', '-')}")
+                    st.write(f"**Disjuntor:** {linha.get('Possui dispositivo do Disjuntor?', '-')}")
+                with f2:
+                    st.write(f"**Lacre:** {linha.get('Instalação do Lacre', '-')}")
+                    st.write(f"**Trâmite Enc.:** {linha.get('Trâmite encontrado', '-')}")
+                    st.write(f"**Tipo Padrão:** {linha.get('Tipo do Padrão', '-')}")
+                    st.write(f"**UC Habitada:** {linha.get('UC Habitada?', '-')}")
+                    st.write(f"**Fornecimento:** {linha.get('Estado de Fornecimento', '-')}")
+                with f3:
+                    st.info(f"**Trâmite:** {linha.get('tramite', '-')}")
+                    st.info(f"**Retorno:** {linha.get('retorno', '-')}")
+                    st.write(f"**Classificação:** {linha.get('classificacao', '-')}")
+                    st.write(f"**Status:** {linha.get('status', '-')}")
+
+            # Bloco 3: Dados do Corte e SLA (Tempo)
+            with st.expander("✂️ Dados do Corte & SLA", expanded=False):
+                # Linha 1
+                crt1, crt2, crt3 = st.columns(3)
+                with crt1: st.write(f"**Ordem Corte:** {linha.get('num_ordem_serv_crt', '-')}")
+                with crt2: st.write(f"**Tipo Corte:** {linha.get('Tipo_corte', '-')}")
+                with crt3: st.write(f"**Grupo:** {linha.get('grupo', '-')}")
+                
+                # Linha 2
+                st.write(f"**Descrição:** {linha.get('descricao_tipo', '-')}")
+                st.write(f"**Mês Corte:** {linha.get('mês_corte', '-')}")
+                
+                # Linha 3 (Cálculos de Tempo)
+                st.markdown("#### ⏳ Análise de Tempo")
+                t1, t2, t3 = st.columns(3)
+                with t1:
+                    st.write("**Data Solicitação:**")
+                    st.write(str(linha.get('data_solic_corte', '-')))
+                with t2:
+                    st.write("**Data Execução (Final):**")
+                    st.write(data_exec_completa)
+                with t3:
+                    st.metric(label="Diferença (Exec - Solic)", value=diferenca_texto)
 
             st.markdown("### ✍️ Preenchimento do Polo")
             
