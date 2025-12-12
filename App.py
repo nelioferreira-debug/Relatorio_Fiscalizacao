@@ -209,12 +209,22 @@ with tab3:
 
             # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
-                c1, c2, c3, c4 = st.columns(4)
-                with c1: st.text_input("ID (Código)", value=val_id_formatado) 
-                with c2: st.text_input("Cliente", value=val_cliente_formatado)
-                with c3: st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
+                # Expandi para 6 colunas para incluir RG e CO
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                with c1:
+                    st.text_input("ID (Código)", value=val_id_formatado)
+                with c2:
+                    st.text_input("Cliente", value=val_cliente_formatado)
+                with c3:
+                    st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
                 # Mostra o Nome do Município (se não achar, mostra o código)
-                with c4: st.text_input("Município", value=nome_municipio, disabled=True)
+                with c4:
+                    st.text_input("Município", value=nome_municipio, disabled=True)
+                # Campos RG e CO solicitados
+                with c5:
+                    st.text_input("RG", value=str(linha.get('RG', linha.get('rg', '-'))), disabled=True)
+                with c6:
+                    st.text_input("CO", value=str(linha.get('CO', linha.get('co', '-'))), disabled=True)
                 st.text_input("Descrição Rede", value=str(linha.get('desc_rede', '-')), disabled=True)
 
             with st.expander("🔎 Detalhes da Fiscalização (Foco)", expanded=False):
