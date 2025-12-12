@@ -580,4 +580,10 @@ with tab3:
                     total_nao_conforme = df_user[df_user['Conformidade_polo'] == 'Não Conforme'].shape[0]
                     destinatario = "nelio.goncalves@enel.com"
                     assunto = "Justificativas Finalizadas"
-                    corpo = f"Nélio,\nAs justificativas foram finalizadas:\nPolo: {usuario_atual}\nConforme: {total_conforme}\nNão Conforme
+                    corpo = f"Nélio,\nAs justificativas foram finalizadas:\nPolo: {usuario_atual}\nConforme: {total_conforme}\nNão Conforme: {total_nao_conforme}"
+                    params = {"subject": assunto, "body": corpo}
+                    query_string = urllib.parse.urlencode(params).replace("+", "%20")
+                    mailto_link = f"mailto:{destinatario}?{query_string}"
+                    
+                    st.success("Resumo gerado!")
+                    st.markdown(f'<a href="{mailto_link}" target="_blank"><button style="background-color:#4CAF50;color:white;padding:15px;border:none;border-radius:12px;cursor:pointer;">📤 Enviar E-mail</button></a>', unsafe_allow_html=True)
