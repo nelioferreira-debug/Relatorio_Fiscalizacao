@@ -81,7 +81,6 @@ def carregar_dados():
     if 'ID' in df.columns:
         df['ID'] = df['ID'].astype(str).str.replace(r'\.0$', '', regex=True)
     
-    # A limpeza automática foi removida daqui para ser gerida via botão no Dashboard
     return df, conn
 
 def salvar_dados(conn, df):
@@ -112,16 +111,14 @@ def limpar_input_edicao(valor):
         return ""
     return str(valor)
 
-# --- TELA DE LOGIN (OTIMIZADA) ---
+# --- TELA DE LOGIN ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
 if not st.session_state['logado']:
     st.markdown("<h1 style='text-align: center; color: #00549F;'>⚡ SGF - Login</h1>", unsafe_allow_html=True)
     
-    # Removemos as colunas [1,2,1] que espremiam a tela no celular.
-    # Agora usamos um container centralizado mais fluido.
-    col_login = st.columns([1, 10, 1]) # Margem pequena nos lados, foco no meio
+    col_login = st.columns([1, 10, 1])
     
     with col_login[1]:
         with st.form("login"):
@@ -163,33 +160,26 @@ tab1, tab2, tab3 = st.tabs(["📊 Visão Geral (Dashboard)", "🏢 Meu Polo", "�
 
 # --- ABA 1: DASHBOARD EXECUTIVO ---
 with tab1:
-    # --- SISTEMA DE DETEÇÃO DE DUPLICATAS (COM BOTÃO) ---
+    # --- SISTEMA DE DETEÇÃO DE DUPLICATAS ---
     colunas_chave = ['ID', 'numero_cliente', 'num_ordem_serv_crt']
     if all(col in df.columns for col in colunas_chave):
         df_analise = df.copy()
-        
-        # 1. Prioriza linhas que já têm justificativa preenchida
         if 'Justificativa_polo' in df_analise.columns:
             df_analise['_tem_justificativa'] = df_analise['Justificativa_polo'].apply(lambda x: 1 if pd.notna(x) and str(x).strip() != "" else 0)
             df_analise = df_analise.sort_values(by='_tem_justificativa', ascending=False)
         
-        # 2. Simula a remoção para ver quantas sobrariam
         df_sem_duplicatas = df_analise.drop_duplicates(subset=colunas_chave, keep='first')
-        
-        # Remove a coluna auxiliar se ela existir
         if '_tem_justificativa' in df_sem_duplicatas.columns:
             df_sem_duplicatas = df_sem_duplicatas.drop(columns=['_tem_justificativa'])
             
         qtd_duplicatas = len(df) - len(df_sem_duplicatas)
 
         if qtd_duplicatas > 0:
-            # Layout do Alerta + Botão
             aviso_col1, aviso_col2 = st.columns([3, 1])
             with aviso_col1:
                 st.warning(f"⚠️ **Atenção:** Detectamos **{qtd_duplicatas}** registros duplicados na base de dados.")
             with aviso_col2:
                 if st.button("🗑️ Excluir Duplicadas", type="primary", use_container_width=True):
-                    # Ação Real: Salva a versão limpa no Google Sheets
                     sucesso = salvar_dados(conn, df_sem_duplicatas)
                     if sucesso:
                         st.toast(f"✅ {qtd_duplicatas} linhas removidas com sucesso!", icon="🧹")
@@ -213,7 +203,6 @@ with tab1:
 
     # Métricas Principais
     total_ordens = len(df)
-    # Considera tratado se o campo Justificativa_polo não estiver vazio
     tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
@@ -242,11 +231,13 @@ with tab1:
     st.markdown("---")
     st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
     
+    # Linha 1 de Gráficos: Resultado e Status
     g1, g2 = st.columns(2)
     
     cores_pizza = ['#00549F', '#A0A0A0', '#FFA500']
     
     with g1:
+        # Gráfico 1: Classificação (Pizza)
         if 'classificacao' in df.columns:
             st.caption("Distribuição por Resultado (Conformidade)")
             df_class = df['classificacao'].value_counts().reset_index()
@@ -257,32 +248,69 @@ with tab1:
             st.plotly_chart(fig_pizza, use_container_width=True)
             
     with g2:
+        # Gráfico 2: Status (Barras Horizontais)
         if 'status' in df.columns:
-            st.caption("Top 5 Tipos de Irregularidades/Divergências")
+            st.caption("Top 5 Tipos de Irregularidades")
             df_status = df['status'].value_counts().head(5).reset_index()
             df_status.columns = ['Tipo Divergência', 'Qtd']
             fig_bar = px.bar(df_status, x='Qtd', y='Tipo Divergência', orientation='h',
+                           text='Qtd', # Rótulo na barra
                            color='Qtd', color_continuous_scale='Blues')
-            fig_bar.update_layout(yaxis={'categoryorder':'total ascending'})
+            # Limpeza visual: Remove eixo X (valores) e ordena barras
+            fig_bar.update_layout(xaxis_visible=False, yaxis={'categoryorder':'total ascending'})
+            fig_bar.update_traces(textposition='outside')
             st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Linha 2 de Gráficos (Novos): Tipo Corte e Grupo
+    g3, g4 = st.columns(2)
+
+    with g3:
+        # Gráfico 3: Tipo de Corte (Vertical)
+        if 'Tipo_corte' in df.columns:
+            st.caption("Distribuição por Tipo de Corte")
+            df_tipo = df['Tipo_corte'].value_counts().reset_index()
+            df_tipo.columns = ['Tipo', 'Qtd']
+            fig_tipo = px.bar(df_tipo, x='Tipo', y='Qtd', text='Qtd',
+                            color_discrete_sequence=['#00549F'])
+            # Limpeza visual: Remove eixo Y (valores)
+            fig_tipo.update_layout(yaxis_visible=False)
+            fig_tipo.update_traces(textposition='outside')
+            st.plotly_chart(fig_tipo, use_container_width=True)
+
+    with g4:
+        # Gráfico 4: Grupo de Serviço (Vertical)
+        if 'grupo' in df.columns:
+            st.caption("Classificação por Grupo de Serviço")
+            df_grupo = df['grupo'].value_counts().reset_index()
+            df_grupo.columns = ['Grupo', 'Qtd']
+            fig_grupo = px.bar(df_grupo, x='Grupo', y='Qtd', text='Qtd',
+                             color_discrete_sequence=['#4093D6'])
+            # Limpeza visual
+            fig_grupo.update_layout(yaxis_visible=False)
+            fig_grupo.update_traces(textposition='outside')
+            st.plotly_chart(fig_grupo, use_container_width=True)
 
     st.markdown("<h3 style='color: #00549F;'>🏆 Performance dos Polos</h3>", unsafe_allow_html=True)
     
+    # Linha 3 de Gráficos: Volume e Eficiência
     p1, p2 = st.columns(2)
 
     with p1:
+        # Gráfico 5: Volume Total por Polo
         if 'polo' in df.columns:
             df_polo_vol = df['polo'].value_counts().reset_index()
             df_polo_vol.columns = ['Polo', 'Total']
             df_polo_vol = df_polo_vol.sort_values('Total', ascending=True)
             
             fig_vol = px.bar(df_polo_vol, x='Total', y='Polo', orientation='h',
-                           text='Total', title="Volume de Fiscalizações por Polo",
+                           text='Total', title="Volume Total de Fiscalizações",
                            color_discrete_sequence=['#00549F'])
+            fig_vol.update_layout(xaxis_visible=False) # Remove eixo X
             fig_vol.update_traces(textposition='outside')
             st.plotly_chart(fig_vol, use_container_width=True)
 
     with p2:
+        # Gráfico 6: % de Conclusão por Polo
         if 'polo' in df.columns:
             df_polo_stats = df.groupby('polo').agg(
                 Total=('ID', 'count'),
@@ -297,9 +325,54 @@ with tab1:
                             title="Ranking de Conclusão (%)",
                             color_discrete_sequence=['#4093D6'])
             
+            fig_perf.update_layout(xaxis_visible=False, xaxis_range=[0, 115]) # Remove eixo X
             fig_perf.update_traces(textposition='outside')
-            fig_perf.update_layout(xaxis_range=[0, 115]) 
             st.plotly_chart(fig_perf, use_container_width=True)
+
+    # Linha 4 de Gráficos (Novos): Ofensores e SLA
+    p3, p4 = st.columns(2)
+
+    with p3:
+        # Gráfico 7: Volume de Não Conformidades por Polo
+        if 'polo' in df.columns and 'classificacao' in df.columns:
+            # Filtra apenas o que é "Não Conforme"
+            df_nc = df[df['classificacao'].astype(str) == 'Não Conforme']
+            df_nc_polo = df_nc['polo'].value_counts().reset_index()
+            df_nc_polo.columns = ['Polo', 'Qtd Não Conforme']
+            
+            fig_nc = px.bar(df_nc_polo, x='Polo', y='Qtd Não Conforme', text='Qtd Não Conforme',
+                          title="Volume de Não Conformidades (Ofensores)",
+                          color_discrete_sequence=['#FFA500']) # Laranja para alerta
+            
+            fig_nc.update_layout(yaxis_visible=False)
+            fig_nc.update_traces(textposition='outside')
+            st.plotly_chart(fig_nc, use_container_width=True)
+
+    with p4:
+        # Gráfico 8: SLA Médio (Dias) por Polo
+        if 'polo' in df.columns and 'data_exec_corte' in df.columns and 'data_solic_corte' in df.columns:
+            # Preparação de datas
+            df_sla = df.copy()
+            df_sla['dt_solic'] = pd.to_datetime(df_sla['data_solic_corte'], dayfirst=True, errors='coerce')
+            # Tenta limpar a data de execução que as vezes vem com hora
+            df_sla['dt_exec'] = pd.to_datetime(df_sla['data_exec_corte'], dayfirst=True, errors='coerce')
+            
+            # Calcula diferença em dias
+            df_sla['dias_sla'] = (df_sla['dt_exec'] - df_sla['dt_solic']).dt.days
+            
+            # Agrupa média por polo
+            df_sla_polo = df_sla.groupby('polo')['dias_sla'].mean().reset_index()
+            df_sla_polo.columns = ['Polo', 'Média Dias']
+            df_sla_polo = df_sla_polo.sort_values('Média Dias', ascending=True) # Menor é melhor
+            
+            fig_sla = px.bar(df_sla_polo, x='Média Dias', y='Polo', orientation='h',
+                           text=df_sla_polo['Média Dias'].apply(lambda x: f'{x:.1f} dias'),
+                           title="Tempo Médio de Atendimento (SLA)",
+                           color_discrete_sequence=['#B8D0F0'])
+            
+            fig_sla.update_layout(xaxis_visible=False)
+            fig_sla.update_traces(textposition='outside')
+            st.plotly_chart(fig_sla, use_container_width=True)
 
 # --- ABA 2: MEU POLO ---
 with tab2:
