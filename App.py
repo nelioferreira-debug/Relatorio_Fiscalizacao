@@ -160,8 +160,19 @@ with tab3:
         st.info("Nenhuma ordem para exibir.")
     else:
         lista_ids = df_user['ID'].unique().tolist()
-        # Adicionado key para controle de estado
-        id_selecionado = st.selectbox("Pesquise o ID da Ordem:", lista_ids, key="seletor_ordem")
+        
+        # --- LÓGICA DE NAVEGAÇÃO SEGURA ---
+        # Se não existir o índice na memória, cria começando do zero
+        if 'indice_navegacao' not in st.session_state:
+            st.session_state['indice_navegacao'] = 0
+            
+        # Garante que o índice não estourou o tamanho da lista (caso a lista diminua)
+        if st.session_state['indice_navegacao'] >= len(lista_ids):
+             st.session_state['indice_navegacao'] = 0
+
+        # O selectbox agora é controlado pelo 'index', sem usar 'key' conflitante
+        id_selecionado = st.selectbox("Pesquise o ID da Ordem:", lista_ids, index=st.session_state['indice_navegacao'])
+        
         mascara = df['ID'] == id_selecionado
         
         if not mascara.any():
@@ -331,12 +342,14 @@ with tab3:
                     if sucesso:
                         st.success("✅ Salvo com sucesso! Carregando próximo...")
                         
-                        # Lógica para avançar automaticamente
+                        # Lógica para avançar automaticamente (SEM MEXER NO WIDGET DIRETAMENTE)
                         try:
-                            idx_atual = lista_ids.index(id_selecionado)
-                            if idx_atual + 1 < len(lista_ids):
-                                proximo_id = lista_ids[idx_atual + 1]
-                                st.session_state['seletor_ordem'] = proximo_id
+                            # Descobre o índice atual na lista que está no seletor
+                            idx_atual_lista = lista_ids.index(id_selecionado)
+                            
+                            # Se não for o último item, incrementa a variável de controle
+                            if idx_atual_lista + 1 < len(lista_ids):
+                                st.session_state['indice_navegacao'] = idx_atual_lista + 1
                             else:
                                 st.info("Você chegou ao fim da lista!")
                         except ValueError:
@@ -346,7 +359,6 @@ with tab3:
                         st.rerun()
 
                 if btn_limpar:
-                    # Limpa todas as colunas de preenchimento do polo para esta linha
                     colunas_para_limpar = [
                         'Justificativa_polo', 'Obs_polo', 'Conformidade_polo', 
                         'Conformidade_grids', 'NOTIFICAÇÃO?', 'SANÇÃO', 
@@ -362,11 +374,9 @@ with tab3:
                         st.rerun()
 
                 if btn_finalizar:
-                    # 1. Calcula os totais do polo
                     total_conforme = df_user[df_user['Conformidade_polo'] == 'Conforme'].shape[0]
                     total_nao_conforme = df_user[df_user['Conformidade_polo'] == 'Não Conforme'].shape[0]
                     
-                    # 2. Monta o link do email (mailto)
                     destinatario = "nelio.goncalves@enel.com"
                     assunto = "Justificativas Finalizadas"
                     corpo = (
@@ -377,15 +387,10 @@ with tab3:
                         f"Não Conforme: {total_nao_conforme}"
                     )
                     
-                    # Codifica para URL
-                    params = {
-                        "subject": assunto,
-                        "body": corpo
-                    }
+                    params = {"subject": assunto, "body": corpo}
                     query_string = urllib.parse.urlencode(params).replace("+", "%20")
                     mailto_link = f"mailto:{destinatario}?{query_string}"
                     
-                    # 3. Mostra o botão para abrir o email
                     st.success("Resumo gerado com sucesso!")
                     st.info("Clique abaixo para abrir seu e-mail:")
                     st.markdown(f'''
