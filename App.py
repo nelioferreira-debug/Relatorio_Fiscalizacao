@@ -367,8 +367,7 @@ with tab3:
                 with crt4: st.write(f"**Tipo Corte:** {limpar_dado(linha.get('Tipo_corte'))}")
                 with crt5: st.write(f"**Grupo:** {limpar_dado(linha.get('grupo'))}")
 
-                st.markdown("#### ⏳ Análise de Tempo")
-                # Padronizando os inputs para ficar igual ao "Dados do Cliente"
+                st.markdown("##### ⏳ Análise de Tempo")
                 t1, t2, t3 = st.columns(3)
                 with t1:
                     st.text_input("Data Solicitação", value=data_solic_formatada, disabled=True)
@@ -483,4 +482,3 @@ with tab3:
                     
                     st.success("Resumo gerado!")
                     st.markdown(f'<a href="{mailto_link}" target="_blank"><button style="background-color:#4CAF50;color:white;padding:15px;border:none;border-radius:12px;cursor:pointer;">📤 Enviar E-mail</button></a>', unsafe_allow_html=True)
-                    
