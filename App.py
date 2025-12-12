@@ -8,7 +8,6 @@ import time
 st.set_page_config(page_title="SGF - Gestão de Fiscalização", page_icon="⚡", layout="wide")
 
 # --- CREDENCIAIS DE LOGIN ---
-# Em um sistema real, isso estaria num banco seguro. Para hoje, serve assim.
 USUARIOS = {
     "CAMPOS": "CAMPOS987",
     "LAGOS": "LAGOS987",
@@ -19,7 +18,7 @@ USUARIOS = {
     "NITEROI": "NITEROI987",
     "MAGÉ": "MAGÉ987",
     "NOROESTE": "NOROESTE987",
-    "ADMIN": "ADMIN123" # Mestre
+    "ADMIN": "ADMIN123"
 }
 
 # --- LISTAS DE OPÇÕES ---
@@ -49,11 +48,10 @@ OPCOES_MULTA = ["", "SIM", "NÃO", "EM ANDAMENTO"]
 # --- CONEXÃO COM GOOGLE SHEETS ---
 def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # TTL=0 garante que os dados não ficam velhos no cache
     df = conn.read(worksheet="Dados", ttl=0)
-    # Converte ID para texto para evitar erro de busca
+    # Garante que ID seja tratado como string desde o início para evitar erros
     if 'ID' in df.columns:
-        df['ID'] = df['ID'].astype(str)
+        df['ID'] = df['ID'].astype(str).str.replace(r'\.0$', '', regex=True)
     return df, conn
 
 def salvar_dados(conn, df):
@@ -83,7 +81,7 @@ if not st.session_state['logado']:
                     st.rerun()
                 else:
                     st.error("Senha incorreta!")
-    st.stop() # Para a execução aqui se não estiver logado
+    st.stop()
 
 # --- APLICAÇÃO PRINCIPAL ---
 st.sidebar.title(f"📍 {st.session_state['usuario']}")
@@ -91,19 +89,16 @@ if st.sidebar.button("Sair / Logout"):
     st.session_state['logado'] = False
     st.rerun()
 
-# Carrega os dados
 try:
     df, conn = carregar_dados()
 except Exception as e:
-    st.error("⚠️ Erro ao ler a planilha. Verifique se a aba se chama 'Dados' e se o robô é Editor.")
+    st.error("⚠️ Erro ao ler a planilha.")
     st.stop()
 
-# Filtra os dados baseado no usuário logado
 usuario_atual = st.session_state['usuario']
 if usuario_atual == "ADMIN":
     df_user = df
 else:
-    # Filtra onde a coluna 'polo' é igual ao usuário logado
     if 'polo' in df.columns:
         df_user = df[df['polo'] == usuario_atual]
     else:
@@ -113,107 +108,90 @@ else:
 # --- ABAS DO SISTEMA ---
 tab1, tab2, tab3 = st.tabs(["📊 Visão Geral", "🏢 Meu Polo", "📝 Tratar Pendências"])
 
-# ABA 1: Visão Geral (ADMIN vê tudo, Polo vê resumo geral)
 with tab1:
     st.metric("Total de Ordens na Base", len(df))
-    
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        # Gráfico de Fiscalizações por Dia
         if 'data_exec_corte' in df.columns:
             st.subheader("Fiscalizações por Dia")
             df_dia = df.groupby('data_exec_corte').size().reset_index(name='Qtd')
             fig1 = px.bar(df_dia, x='data_exec_corte', y='Qtd')
             st.plotly_chart(fig1, use_container_width=True)
-    
     with col_g2:
-        # Progresso de Justificativas
         if 'Justificativa_polo' in df.columns:
             st.subheader("Status de Tratamento")
-            # Conta quantos têm justificativa preenchida
             tratados = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
             total = len(df)
             progresso = (tratados / total) * 100 if total > 0 else 0
             st.progress(progresso / 100, text=f"{progresso:.1f}% Tratado ({tratados}/{total})")
 
-# ABA 2: Visão do Polo Específico
 with tab2:
     st.subheader(f"Dados de {usuario_atual}")
     st.metric("Minhas Pendências", len(df_user))
-    
     if not df_user.empty:
-        # Tabela simples
+        # Exibe sem formatação científica na tabela
         st.dataframe(df_user.head(10), use_container_width=True)
-        
-        # Botão de Download
         csv = df_user.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar Meus Dados (CSV)", csv, "meus_dados.csv", "text/csv")
 
-# ABA 3: Edição e Tratativa
 with tab3:
     st.header("Tratamento de Justificativas")
-    
-    # Seletor de Ordem (ID)
     if df_user.empty:
         st.info("Nenhuma ordem para exibir.")
     else:
         lista_ids = df_user['ID'].unique().tolist()
         id_selecionado = st.selectbox("Pesquise o ID da Ordem:", lista_ids)
-        
-        # Localiza a linha exata no DataFrame ORIGINAL (df) para editar
-        # Usamos df (geral) e não df_user para garantir que editamos a base correta
         mascara = df['ID'] == id_selecionado
         
         if not mascara.any():
             st.error("ID não encontrado.")
         else:
-            # Pega o índice da linha para editar
             idx = df[mascara].index[0]
             linha = df.loc[idx]
             
-            # --- CÁLCULO DE DATAS E DIFERENÇA ---
+            # Cálculo de Datas
             diferenca_texto = "-"
             data_exec_completa = "-"
-            
             try:
-                # Converter Data Solicitação (tenta ler como dia/mês/ano)
                 dt_solic = pd.to_datetime(linha.get('data_solic_corte'), dayfirst=True, errors='coerce')
-                
-                # Montar Data Execução (Data + Hora)
                 str_data_exec = str(linha.get('data_exec_corte', ''))
                 str_hora_exec = str(linha.get('hora_exec_corte', ''))
-                
-                # Junta strings apenas se existirem
                 if str_data_exec != 'nan' and str_data_exec != '':
-                    # Limpeza simples caso venha sujeira
                     str_completa = f"{str_data_exec} {str_hora_exec}".strip()
                     dt_exec = pd.to_datetime(str_completa, dayfirst=True, errors='coerce')
-                    
                     if pd.notna(dt_exec):
                         data_exec_completa = dt_exec.strftime("%d/%m/%Y %H:%M:%S")
-                    
-                    # Cálculo da Diferença (Execução - Solicitação)
                     if pd.notna(dt_solic) and pd.notna(dt_exec):
                         delta = dt_exec - dt_solic
                         diferenca_texto = str(delta)
-            except Exception as e:
+            except Exception:
                 diferenca_texto = "Erro no cálculo"
 
             st.markdown("---")
             
-            # --- VISUALIZAÇÃO DOS DADOS (Blocos Expansíveis) ---
-            
-            # Bloco 1: Dados do Cliente e ID
+            # --- FUNÇÃO PARA REMOVER CASAS DECIMAIS VISUAIS ---
+            def formatar_sem_decimal(valor):
+                try:
+                    if pd.isna(valor) or str(valor).strip() == '':
+                        return "-"
+                    # Converte para float primeiro (para pegar 123.0), depois int, depois string
+                    return str(int(float(valor)))
+                except:
+                    return str(valor)
+
+            # Aplica a formatação
+            val_id_formatado = formatar_sem_decimal(linha.get('ID'))
+            val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
+
+            # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
                 c1, c2, c3, c4 = st.columns(4)
-                with c1: st.text_input("ID (Código)", value=str(linha.get('ID', '-')), disabled=True)
-                with c2: st.text_input("Cliente", value=str(linha.get('numero_cliente', '-')), disabled=False)
+                with c1: st.text_input("ID (Código)", value=val_id_formatado) 
+                with c2: st.text_input("Cliente", value=val_cliente_formatado)
                 with c3: st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
                 with c4: st.text_input("Município", value=str(linha.get('municipio', '-')), disabled=True)
-                
                 st.text_input("Descrição Rede", value=str(linha.get('desc_rede', '-')), disabled=True)
 
-            # Bloco 2: Detalhes da Fiscalização
             with st.expander("🔎 Detalhes da Fiscalização (Foco)", expanded=False):
                 f1, f2, f3 = st.columns(3)
                 with f1:
@@ -234,19 +212,13 @@ with tab3:
                     st.write(f"**Classificação:** {linha.get('classificacao', '-')}")
                     st.write(f"**Status:** {linha.get('status', '-')}")
 
-            # Bloco 3: Dados do Corte e SLA (Tempo)
             with st.expander("✂️ Dados do Corte & SLA", expanded=False):
-                # Linha 1
                 crt1, crt2, crt3 = st.columns(3)
                 with crt1: st.write(f"**Ordem Corte:** {linha.get('num_ordem_serv_crt', '-')}")
                 with crt2: st.write(f"**Tipo Corte:** {linha.get('Tipo_corte', '-')}")
                 with crt3: st.write(f"**Grupo:** {linha.get('grupo', '-')}")
-                
-                # Linha 2
                 st.write(f"**Descrição:** {linha.get('descricao_tipo', '-')}")
                 st.write(f"**Mês Corte:** {linha.get('mês_corte', '-')}")
-                
-                # Linha 3 (Cálculos de Tempo)
                 st.markdown("#### ⏳ Análise de Tempo")
                 t1, t2, t3 = st.columns(3)
                 with t1:
@@ -261,57 +233,39 @@ with tab3:
             st.markdown("### ✍️ Preenchimento do Polo")
             
             with st.form("form_tratativa"):
-                # Campos de Edição - Divididos em 3 colunas para caber tudo
                 col_e1, col_e2, col_e3 = st.columns(3)
-                
                 with col_e1:
                     st.markdown("**Análise do Polo**")
-                    # Justificativa
                     val_just = linha.get('Justificativa_polo')
                     idx_just = OPCOES_JUSTIFICATIVA.index(val_just) if val_just in OPCOES_JUSTIFICATIVA else 0
                     nova_just = st.selectbox("Justificativa", OPCOES_JUSTIFICATIVA, index=idx_just)
-                    
-                    # Observação
                     val_obs = linha.get('Obs_polo')
                     idx_obs = OPCOES_OBS.index(val_obs) if val_obs in OPCOES_OBS else 0
                     nova_obs = st.selectbox("Observação", OPCOES_OBS, index=idx_obs)
 
                 with col_e2:
                     st.markdown("**Conformidade & Notificação**")
-                    # Conformidade Polo
                     nova_conf = st.selectbox("Conformidade Polo", ["", "Conforme", "Não Conforme"], 
                                            index=1 if linha.get('Conformidade_polo') == "Conforme" else 2 if linha.get('Conformidade_polo') == "Não Conforme" else 0)
-                    
-                    # Conformidade Grids
                     val_grids = linha.get('Conformidade_grids')
                     idx_grids = OPCOES_CONF_GRIDS.index(val_grids) if val_grids in OPCOES_CONF_GRIDS else 0
                     nova_conf_grids = st.selectbox("Conformidade Grids", OPCOES_CONF_GRIDS, index=idx_grids)
-
-                    # Notificação
                     nova_notificacao = st.selectbox("Notificação?", ["", "SIM", "NÃO"], 
                                                   index=1 if linha.get('NOTIFICAÇÃO?') == "SIM" else 2 if linha.get('NOTIFICAÇÃO?') == "NÃO" else 0)
 
                 with col_e3:
                     st.markdown("**Sanções e Multas**")
-                    # Sanção
                     val_sancao = linha.get('SANÇÃO')
                     idx_sancao = OPCOES_SANCAO.index(val_sancao) if val_sancao in OPCOES_SANCAO else 0
                     nova_sancao = st.selectbox("Sanção", OPCOES_SANCAO, index=idx_sancao)
-                    
-                    # Valor
                     novo_valor = st.text_input("Valor (R$)", value=str(linha.get('VALOR', '')))
-
-                    # Multa e Valor Multa
                     val_multa = linha.get('MULTA?')
                     idx_multa = OPCOES_MULTA.index(val_multa) if val_multa in OPCOES_MULTA else 0
                     nova_multa = st.selectbox("Multa?", OPCOES_MULTA, index=idx_multa)
-                    
                     novo_valor_multa = st.text_input("Valor Multa (R$)", value=str(linha.get('VALOR MULTA', '')))
 
-                # Botão de Salvar
                 st.markdown("---")
                 if st.form_submit_button("💾 Salvar Tratativa Completa", type="primary"):
-                    # Atualiza o DataFrame em memória
                     df.at[idx, 'Justificativa_polo'] = nova_just
                     df.at[idx, 'Obs_polo'] = nova_obs
                     df.at[idx, 'Conformidade_polo'] = nova_conf
@@ -322,9 +276,7 @@ with tab3:
                     df.at[idx, 'MULTA?'] = nova_multa
                     df.at[idx, 'VALOR MULTA'] = novo_valor_multa
                     
-                    # Envia para o Google Sheets
                     sucesso = salvar_dados(conn, df)
-                    
                     if sucesso:
                         st.success("✅ Todos os dados foram salvos no Google Sheets!")
                         time.sleep(1)
