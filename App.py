@@ -298,7 +298,7 @@ with tab3:
             idx = df[mascara].index[0]
             linha = df.loc[idx]
             
-            # Cálculos de Data
+            # Cálculo de Datas (Mantido para lógica interna se necessário, mas removido visualmente)
             diferenca_texto = "-"
             data_exec_completa = "-"
             data_solic_formatada = "-" 
@@ -358,7 +358,7 @@ with tab3:
                     st.error(f"**Classificação:** {limpar_dado(linha.get('classificacao'))}")
                     st.error(f"**Status:** {limpar_dado(linha.get('status'))}")
 
-            with st.expander("✂️ Dados do Corte & SLA", expanded=False):
+            with st.expander("✂️ Dados do Corte", expanded=False):
                 # Organização em uma única linha com 5 colunas
                 crt1, crt2, crt3, crt4, crt5 = st.columns(5)
                 with crt1: st.write(f"**Mês Corte:** {limpar_dado(linha.get('mês_corte'))}")
@@ -366,16 +366,6 @@ with tab3:
                 with crt3: st.write(f"**Descrição:** {limpar_dado(linha.get('descricao_tipo'))}")
                 with crt4: st.write(f"**Tipo Corte:** {limpar_dado(linha.get('Tipo_corte'))}")
                 with crt5: st.write(f"**Grupo:** {limpar_dado(linha.get('grupo'))}")
-
-                st.markdown("#### ⏳ Análise de Tempo")
-                # Padronizando os inputs para ficar igual ao "Dados do Cliente"
-                t1, t2, t3 = st.columns(3)
-                with t1:
-                    st.text_input("Data Solicitação", value=data_solic_formatada, disabled=True)
-                with t2:
-                    st.text_input("Data Execução (Final)", value=data_exec_completa, disabled=True)
-                with t3:
-                    st.text_input("Diferença (Exec - Solic)", value=diferenca_texto, disabled=True)
 
             st.markdown("### ✍️ Preenchimento do Polo")
             
