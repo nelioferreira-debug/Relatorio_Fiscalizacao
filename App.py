@@ -204,6 +204,7 @@ with tab1:
 
     # Métricas Principais
     total_ordens = len(df)
+    # Considera tratado se o campo Justificativa_polo não estiver vazio
     tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
@@ -232,62 +233,57 @@ with tab1:
     st.markdown("---")
     st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
     
-    # Linha 1 de Gráficos: Resultado e Status
-    g1, g2 = st.columns(2)
+    # Layout em Linha Única para os 4 Gráficos de Foco
+    g1, g2, g3, g4 = st.columns(4)
     
     cores_pizza = ['#00549F', '#A0A0A0', '#FFA500']
     
     with g1:
         # Gráfico 1: Classificação (Pizza)
         if 'classificacao' in df.columns:
-            st.caption("Distribuição por Resultado (Conformidade)")
+            st.caption("Conformidade")
             df_class = df['classificacao'].value_counts().reset_index()
             df_class.columns = ['Resultado', 'Qtd']
             fig_pizza = px.pie(df_class, values='Qtd', names='Resultado', 
                              color_discrete_sequence=cores_pizza,
                              hole=0.4)
+            fig_pizza.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0)) # Compactar
             st.plotly_chart(fig_pizza, use_container_width=True)
             
     with g2:
         # Gráfico 2: Status (Barras Horizontais)
         if 'status' in df.columns:
-            st.caption("Top 5 Tipos de Irregularidades")
+            st.caption("Top Irregularidades")
             df_status = df['status'].value_counts().head(5).reset_index()
-            df_status.columns = ['Tipo Divergência', 'Qtd']
-            fig_bar = px.bar(df_status, x='Qtd', y='Tipo Divergência', orientation='h',
-                           text='Qtd', # Rótulo na barra
+            df_status.columns = ['Tipo', 'Qtd']
+            fig_bar = px.bar(df_status, x='Qtd', y='Tipo', orientation='h',
+                           text='Qtd',
                            color='Qtd', color_continuous_scale='Blues')
-            # Limpeza visual: Remove eixo X (valores) e ordena barras
-            fig_bar.update_layout(xaxis_visible=False, yaxis={'categoryorder':'total ascending'})
-            fig_bar.update_traces(textposition='outside')
+            fig_bar.update_layout(xaxis_visible=False, yaxis={'categoryorder':'total ascending'}, margin=dict(t=0, b=0, l=0, r=0))
+            fig_bar.update_traces(textposition='inside')
             st.plotly_chart(fig_bar, use_container_width=True)
-
-    # Linha 2 de Gráficos (Novos): Tipo Corte e Grupo
-    g3, g4 = st.columns(2)
 
     with g3:
         # Gráfico 3: Tipo de Corte (Vertical)
         if 'Tipo_corte' in df.columns:
-            st.caption("Distribuição por Tipo de Corte")
+            st.caption("Tipo de Corte")
             df_tipo = df['Tipo_corte'].value_counts().reset_index()
             df_tipo.columns = ['Tipo', 'Qtd']
             fig_tipo = px.bar(df_tipo, x='Tipo', y='Qtd', text='Qtd',
                             color_discrete_sequence=['#00549F'])
-            # Limpeza visual: Remove eixo Y (valores)
-            fig_tipo.update_layout(yaxis_visible=False)
+            fig_tipo.update_layout(yaxis_visible=False, margin=dict(t=0, b=0, l=0, r=0))
             fig_tipo.update_traces(textposition='outside')
             st.plotly_chart(fig_tipo, use_container_width=True)
 
     with g4:
         # Gráfico 4: Grupo de Serviço (Vertical)
         if 'grupo' in df.columns:
-            st.caption("Classificação por Grupo de Serviço")
+            st.caption("Grupo de Serviço")
             df_grupo = df['grupo'].value_counts().reset_index()
             df_grupo.columns = ['Grupo', 'Qtd']
             fig_grupo = px.bar(df_grupo, x='Grupo', y='Qtd', text='Qtd',
                              color_discrete_sequence=['#4093D6'])
-            # Limpeza visual
-            fig_grupo.update_layout(yaxis_visible=False)
+            fig_grupo.update_layout(yaxis_visible=False, margin=dict(t=0, b=0, l=0, r=0))
             fig_grupo.update_traces(textposition='outside')
             st.plotly_chart(fig_grupo, use_container_width=True)
 
