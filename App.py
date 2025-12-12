@@ -207,7 +207,7 @@ with tab3:
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: st.text_input("ID (Código)", value=str(linha.get('ID', '-')), disabled=True)
-                with c2: st.text_input("Cliente", value=str(linha.get('numero_cliente', '-')), disabled=True)
+                with c2: st.text_input("Cliente", value=str(linha.get('numero_cliente', '-')), disabled=False)
                 with c3: st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
                 with c4: st.text_input("Município", value=str(linha.get('municipio', '-')), disabled=True)
                 
