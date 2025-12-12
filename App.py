@@ -21,6 +21,27 @@ USUARIOS = {
     "ADMIN": "ADMIN123"
 }
 
+# --- DE-PARA DE MUNICÍPIOS (Código -> Nome) ---
+DE_PARA_MUNICIPIOS = {
+    "4157": "CAMPOS DO GOYTACAZES", "4169": "CARDOSO MOREIRA", "4130": "SÃO FRANCISCO DO ITABAPOANA", "4158": "SÃO JOÃO DA BARRA",
+    "4359": "BOM JESUS DO ITABAPOANA", "4365": "ITALVA", "4360": "ITAPERUNA", "4361": "LAJE DO MURIAÉ",
+    "4362": "NATIVIDADE", "4363": "PORCIÚNCULA", "4322": "SÃO JOSÉ DE UBÁ", "4364": "VARRE-SAI",
+    "1239": "ARARUAMA", "1231": "IGUABA GRANDE", "1238": "SAQUAREMA", "2109": "SILVA JARDIM",
+    "1324": "ARMAÇÃO DE BÚZIOS", "1329": "ARRAIAL DO CABO", "1342": "CABO FRIO", "1341": "SÃO PEDRO DA ALDEIA",
+    "4544": "BOM JARDIM", "4546": "CANTAGALO", "4535": "CARMO", "4545": "CORDEIRO",
+    "4537": "DUAS BARRAS", "4523": "MACUCO", "4251": "SANTA MARIA MADALENA", "4547": "SÃO SEBASTIÃO DO ALTO",
+    "4248": "TRAJANO DE MORAIS", "4225": "CARAPEBUS", "4243": "CASIMIRO DE ABREU", "4250": "CONCEIÇÃO DE MACABU",
+    "4249": "MACAÉ", "4268": "QUISSAMÃ", "4240": "RIO DAS OSTRAS", "4432": "APERIBE",
+    "4455": "CAMBUCI", "4452": "ITAOCARA", "4454": "MIRACEMA", "4453": "SANTO ANTÔNIO DE PÁDUA",
+    "4456": "SÃO FIDELIS", "2221": "DUQUE DE CAXIAS", "2233": "CACHOEIRAS DE MACACU", "2226": "GUAPIMIRIM",
+    "2227": "MAGÉ", "1407": "MARICÁ", "1401": "NITERÓI", "2106": "ITABORAÍ",
+    "2108": "RIO BONITO", "2111": "TANGUÁ", "2102": "SÃO GONÇALO", "3110": "AREAL",
+    "3105": "PARAIBA DO SUL", "3103": "PETRÓPOLIS", "3166": "SÃO JOSÉ DO VALE DO RIO PRETO", "3104": "TRÊS RIOS",
+    "3236": "NOVA FRIBURGO", "3234": "SUMIDOURO", "3228": "TERESÓPOLIS", "1119": "ANGRA DOS REIS",
+    "1120": "MANGARATIBA", "1117": "PARATY", "3315": "BOCAINA DE MINAS", "3367": "ITATIAIA",
+    "3316": "PORTO REAL", "3318": "RESENDE"
+}
+
 # --- LISTAS DE OPÇÕES ---
 OPCOES_JUSTIFICATIVA = [
     "", "Agrupamento", "Falha não apontada", "Med retirado/padrão demolido", 
@@ -182,6 +203,9 @@ with tab3:
             # Aplica a formatação
             val_id_formatado = formatar_sem_decimal(linha.get('ID'))
             val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
+            # Aqui aplicamos a limpeza E a busca no dicionário
+            codigo_municipio_limpo = formatar_sem_decimal(linha.get('municipio'))
+            nome_municipio = DE_PARA_MUNICIPIOS.get(codigo_municipio_limpo, codigo_municipio_limpo)
 
             # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
@@ -189,7 +213,8 @@ with tab3:
                 with c1: st.text_input("ID (Código)", value=val_id_formatado) 
                 with c2: st.text_input("Cliente", value=val_cliente_formatado)
                 with c3: st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
-                with c4: st.text_input("Município", value=str(linha.get('municipio', '-')), disabled=True)
+                # Mostra o Nome do Município (se não achar, mostra o código)
+                with c4: st.text_input("Município", value=nome_municipio, disabled=True)
                 st.text_input("Descrição Rede", value=str(linha.get('desc_rede', '-')), disabled=True)
 
             with st.expander("🔎 Detalhes da Fiscalização (Foco)", expanded=False):
