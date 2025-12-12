@@ -70,7 +70,6 @@ OPCOES_MULTA = ["", "SIM", "NÃO", "EM ANDAMENTO"]
 def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Dados", ttl=0)
-    # Garante que ID seja tratado como string desde o início para evitar erros
     if 'ID' in df.columns:
         df['ID'] = df['ID'].astype(str).str.replace(r'\.0$', '', regex=True)
     return df, conn
@@ -150,7 +149,6 @@ with tab2:
     st.subheader(f"Dados de {usuario_atual}")
     st.metric("Minhas Pendências", len(df_user))
     if not df_user.empty:
-        # Exibe sem formatação científica na tabela
         st.dataframe(df_user.head(10), use_container_width=True)
         csv = df_user.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar Meus Dados (CSV)", csv, "meus_dados.csv", "text/csv")
@@ -190,75 +188,71 @@ with tab3:
 
             st.markdown("---")
             
+            # --- FUNÇÃO PARA LIMPEZA GERAL (Substitui vazio por "-") ---
+            def limpar_dado(valor):
+                if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
+                    return "-"
+                return str(valor)
+
             # --- FUNÇÃO PARA REMOVER CASAS DECIMAIS VISUAIS ---
             def formatar_sem_decimal(valor):
                 try:
                     if pd.isna(valor) or str(valor).strip() == '':
                         return "-"
-                    # Converte para float primeiro (para pegar 123.0), depois int, depois string
                     return str(int(float(valor)))
                 except:
                     return str(valor)
 
-            # Aplica a formatação
+            # Aplica formatações
             val_id_formatado = formatar_sem_decimal(linha.get('ID'))
             val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
-            # Aqui aplicamos a limpeza E a busca no dicionário
             codigo_municipio_limpo = formatar_sem_decimal(linha.get('municipio'))
             nome_municipio = DE_PARA_MUNICIPIOS.get(codigo_municipio_limpo, codigo_municipio_limpo)
 
             # --- BLOCOS DE DADOS ---
             with st.expander("👤 Dados do Cliente & ID", expanded=True):
-                # Expandi para 6 colunas para incluir RG e CO
-                c1, c2, c3, c4, c5, c6 = st.columns(6)
-                with c1:
-                    st.text_input("ID (Código)", value=val_id_formatado)
-                with c2:
-                    st.text_input("Cliente", value=val_cliente_formatado)
-                with c3:
-                    st.text_input("Polo", value=str(linha.get('polo', '-')), disabled=True)
-                # Mostra o Nome do Município (se não achar, mostra o código)
-                with c4:
-                    st.text_input("Município", value=nome_municipio, disabled=True)
-                # Campos RG e CO solicitados
-                with c5:
-                    st.text_input("RG", value=str(linha.get('RG', linha.get('rg', '-'))), disabled=True)
-                with c6:
-                    st.text_input("CO", value=str(linha.get('CO', linha.get('co', '-'))), disabled=True)
-                st.text_input("Descrição Rede", value=str(linha.get('desc_rede', '-')), disabled=True)
+                c1, c2, c3, c4 = st.columns(4)
+                with c1: st.text_input("ID (Código)", value=val_id_formatado) 
+                with c2: st.text_input("Cliente", value=val_cliente_formatado)
+                with c3: st.text_input("Polo", value=limpar_dado(linha.get('polo')), disabled=True)
+                with c4: st.text_input("Município", value=nome_municipio, disabled=True)
+                st.text_input("Descrição Rede", value=limpar_dado(linha.get('desc_rede')), disabled=True)
 
             with st.expander("🔎 Detalhes da Fiscalização (Foco)", expanded=False):
                 f1, f2, f3 = st.columns(3)
                 with f1:
-                    st.write(f"**Mês Fisc:** {linha.get('mês_fisc', '-')}")
-                    st.write(f"**Data Início:** {linha.get('Hora de início', '-')}")
-                    st.write(f"**Ordem:** {linha.get('Numero Ordem', '-')}")
-                    st.write(f"**Parafuso Seg.:** {linha.get('Possui parafuso de segurança?', '-')}")
-                    st.write(f"**Disjuntor:** {linha.get('Possui dispositivo do Disjuntor?', '-')}")
+                    st.write(f"**Mês Fisc:** {limpar_dado(linha.get('mês_fisc'))}")
+                    st.write(f"**Data Início:** {limpar_dado(linha.get('Hora de início'))}")
+                    st.write(f"**Ordem:** {limpar_dado(linha.get('Numero Ordem'))}")
+                    st.write(f"**Parafuso Seg.:** {limpar_dado(linha.get('Possui parafuso de segurança?'))}")
+                    st.write(f"**Disjuntor:** {limpar_dado(linha.get('Possui dispositivo do Disjuntor?'))}")
                 with f2:
-                    st.write(f"**Lacre:** {linha.get('Instalação do Lacre', '-')}")
-                    st.write(f"**Trâmite Enc.:** {linha.get('Trâmite encontrado', '-')}")
-                    st.write(f"**Tipo Padrão:** {linha.get('Tipo do Padrão', '-')}")
-                    st.write(f"**UC Habitada:** {linha.get('UC Habitada?', '-')}")
-                    st.write(f"**Fornecimento:** {linha.get('Estado de Fornecimento', '-')}")
+                    st.write(f"**Lacre:** {limpar_dado(linha.get('Instalação do Lacre'))}")
+                    st.write(f"**Trâmite Enc.:** {limpar_dado(linha.get('Trâmite encontrado'))}")
+                    st.write(f"**Tipo Padrão:** {limpar_dado(linha.get('Tipo do Padrão'))}")
+                    st.write(f"**UC Habitada:** {limpar_dado(linha.get('UC Habitada?'))}")
+                    st.write(f"**Fornecimento:** {limpar_dado(linha.get('Estado de Fornecimento'))}")
                 with f3:
-                    st.info(f"**Trâmite:** {linha.get('tramite', '-')}")
-                    st.info(f"**Retorno:** {linha.get('retorno', '-')}")
-                    st.write(f"**Classificação:** {linha.get('classificacao', '-')}")
-                    st.write(f"**Status:** {linha.get('status', '-')}")
+                    # Trâmite e Retorno em AZUL (st.info)
+                    st.info(f"**Trâmite:** {limpar_dado(linha.get('tramite'))}")
+                    st.info(f"**Retorno:** {limpar_dado(linha.get('retorno'))}")
+                    
+                    # Classificação e Status em VERMELHO (st.error)
+                    st.error(f"**Classificação:** {limpar_dado(linha.get('classificacao'))}")
+                    st.error(f"**Status:** {limpar_dado(linha.get('status'))}")
 
             with st.expander("✂️ Dados do Corte & SLA", expanded=False):
                 crt1, crt2, crt3 = st.columns(3)
-                with crt1: st.write(f"**Ordem Corte:** {linha.get('num_ordem_serv_crt', '-')}")
-                with crt2: st.write(f"**Tipo Corte:** {linha.get('Tipo_corte', '-')}")
-                with crt3: st.write(f"**Grupo:** {linha.get('grupo', '-')}")
-                st.write(f"**Descrição:** {linha.get('descricao_tipo', '-')}")
-                st.write(f"**Mês Corte:** {linha.get('mês_corte', '-')}")
+                with crt1: st.write(f"**Ordem Corte:** {limpar_dado(linha.get('num_ordem_serv_crt'))}")
+                with crt2: st.write(f"**Tipo Corte:** {limpar_dado(linha.get('Tipo_corte'))}")
+                with crt3: st.write(f"**Grupo:** {limpar_dado(linha.get('grupo'))}")
+                st.write(f"**Descrição:** {limpar_dado(linha.get('descricao_tipo'))}")
+                st.write(f"**Mês Corte:** {limpar_dado(linha.get('mês_corte'))}")
                 st.markdown("#### ⏳ Análise de Tempo")
                 t1, t2, t3 = st.columns(3)
                 with t1:
                     st.write("**Data Solicitação:**")
-                    st.write(str(linha.get('data_solic_corte', '-')))
+                    st.write(limpar_dado(linha.get('data_solic_corte')))
                 with t2:
                     st.write("**Data Execução (Final):**")
                     st.write(data_exec_completa)
