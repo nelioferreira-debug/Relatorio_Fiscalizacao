@@ -5,8 +5,14 @@ import plotly.express as px
 import time
 import urllib.parse 
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="SGF - Gestão de Fiscalização", page_icon="⚡", layout="wide")
+# --- CONFIGURAÇÃO DA PÁGINA (OTIMIZADA PARA MOBILE) ---
+# initial_sidebar_state="collapsed" -> Começa com o menu fechado para ganhar espaço no celular
+st.set_page_config(
+    page_title="SGF - Gestão de Fiscalização", 
+    page_icon="⚡", 
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # --- CREDENCIAIS DE LOGIN ---
 USUARIOS = {
@@ -103,14 +109,18 @@ def limpar_input_edicao(valor):
         return ""
     return str(valor)
 
-# --- TELA DE LOGIN ---
+# --- TELA DE LOGIN (OTIMIZADA) ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
 if not st.session_state['logado']:
     st.markdown("<h1 style='text-align: center; color: #00549F;'>⚡ SGF - Login</h1>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
+    
+    # Removemos as colunas [1,2,1] que espremiam a tela no celular.
+    # Agora usamos um container centralizado mais fluido.
+    col_login = st.columns([1, 10, 1]) # Margem pequena nos lados, foco no meio
+    
+    with col_login[1]:
         with st.form("login"):
             user = st.selectbox("Selecione o Polo", list(USUARIOS.keys()))
             pwd = st.text_input("Senha", type="password")
@@ -167,46 +177,44 @@ with tab1:
 
     # Métricas Principais
     total_ordens = len(df)
-    # Considera tratado se o campo Justificativa_polo não estiver vazio
     tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
     pendentes_geral = total_ordens - tratados_geral
     percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
 
-    # Cálculo % Autoreligado
     if 'Estado de Fornecimento' in df.columns:
         qtd_autoreligado = df[df['Estado de Fornecimento'].astype(str).str.lower() == 'autoreligado'].shape[0]
         perc_autoreligado = (qtd_autoreligado / total_ordens * 100) if total_ordens > 0 else 0
     else:
         perc_autoreligado = 0
 
-    # Cálculo % com Lacre (Conta o que NÃO é "Sem lacre" ou "Sem condições")
     if 'Instalação do Lacre' in df.columns:
         qtd_com_lacre = df[~df['Instalação do Lacre'].astype(str).str.lower().str.contains('sem', na=True)].shape[0]
         perc_lacre = (qtd_com_lacre / total_ordens * 100) if total_ordens > 0 else 0
     else:
         perc_lacre = 0
 
-    # Exibição das Métricas em 6 colunas
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("Total Fiscalizações", total_ordens)
-    m2.metric("Concluídas", tratados_geral, delta=f"{percentual_geral:.1f}%")
-    m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
-    m4.metric("Dias Restantes", "5", "Estimativa")
-    m5.metric("% Com Lacre", f"{perc_lacre:.1f}%")
-    m6.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
+    # OTIMIZAÇÃO MOBILE: Dividir as 6 métricas em 2 linhas de 3
+    # Isso evita que os números fiquem minusculos no celular
+    row1_m1, row1_m2, row1_m3 = st.columns(3)
+    row1_m1.metric("Total Fiscalizações", total_ordens)
+    row1_m2.metric("Concluídas", tratados_geral, delta=f"{percentual_geral:.1f}%")
+    row1_m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
+    
+    st.markdown("") # Espaço vazio
+
+    row2_m1, row2_m2, row2_m3 = st.columns(3)
+    row2_m1.metric("Dias Restantes", "5", "Estimativa")
+    row2_m2.metric("% Com Lacre", f"{perc_lacre:.1f}%")
+    row2_m3.metric("% Autoreligado", f"{perc_autoreligado:.1f}%", delta_color="off")
 
     st.markdown("---")
     st.markdown("<h3 style='color: #00549F;'>🔎 Focos da Fiscalização</h3>", unsafe_allow_html=True)
     
-    # Linha 1 de Gráficos: Resultado e Tipos
     g1, g2 = st.columns(2)
     
-    # Cores personalizadas (Azul e Cinza/Laranja)
     cores_pizza = ['#00549F', '#A0A0A0', '#FFA500']
-    cores_barras = ['#00549F', '#0072C6', '#4093D6', '#7EB1E3', '#B8D0F0']
-
+    
     with g1:
-        # Gráfico de Pizza: Classificação (Conforme vs Não Conforme)
         if 'classificacao' in df.columns:
             st.caption("Distribuição por Resultado (Conformidade)")
             df_class = df['classificacao'].value_counts().reset_index()
@@ -217,7 +225,6 @@ with tab1:
             st.plotly_chart(fig_pizza, use_container_width=True)
             
     with g2:
-        # Gráfico de Barras: Status da Irregularidade
         if 'status' in df.columns:
             st.caption("Top 5 Tipos de Irregularidades/Divergências")
             df_status = df['status'].value_counts().head(5).reset_index()
@@ -229,11 +236,9 @@ with tab1:
 
     st.markdown("<h3 style='color: #00549F;'>🏆 Performance dos Polos</h3>", unsafe_allow_html=True)
     
-    # Linha 2 de Gráficos: Volume e Eficiência
     p1, p2 = st.columns(2)
 
     with p1:
-        # Gráfico: Volume Total por Polo
         if 'polo' in df.columns:
             df_polo_vol = df['polo'].value_counts().reset_index()
             df_polo_vol.columns = ['Polo', 'Total']
@@ -246,7 +251,6 @@ with tab1:
             st.plotly_chart(fig_vol, use_container_width=True)
 
     with p2:
-        # Gráfico: % de Conclusão por Polo
         if 'polo' in df.columns:
             df_polo_stats = df.groupby('polo').agg(
                 Total=('ID', 'count'),
