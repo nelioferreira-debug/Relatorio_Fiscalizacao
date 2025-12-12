@@ -3,7 +3,7 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import plotly.express as px
 import time
-import urllib.parse # Necessário para criar o link de e-mail
+import urllib.parse 
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SGF - Gestão de Fiscalização", page_icon="⚡", layout="wide")
@@ -84,6 +84,25 @@ def salvar_dados(conn, df):
         st.error(f"Erro ao salvar: {e}")
         return False
 
+# --- FUNÇÕES DE AJUDA ---
+def limpar_dado(valor):
+    if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return "-"
+    return str(valor)
+
+def formatar_sem_decimal(valor):
+    try:
+        if pd.isna(valor) or str(valor).strip() == '':
+            return "-"
+        return str(int(float(valor)))
+    except:
+        return str(valor)
+
+def limpar_input_edicao(valor):
+    if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return ""
+    return str(valor)
+
 # --- TELA DE LOGIN ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
@@ -127,25 +146,80 @@ else:
         df_user = pd.DataFrame()
 
 # --- ABAS DO SISTEMA ---
-tab1, tab2, tab3 = st.tabs(["📊 Visão Geral", "🏢 Meu Polo", "📝 Tratar Pendências"])
+tab1, tab2, tab3 = st.tabs(["📊 Visão Geral (Dashboard)", "🏢 Meu Polo", "📝 Tratar Pendências"])
 
+# --- ABA 1: DASHBOARD EXECUTIVO ---
 with tab1:
-    st.metric("Total de Ordens na Base", len(df))
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
-        if 'data_exec_corte' in df.columns:
-            st.subheader("Fiscalizações por Dia")
-            df_dia = df.groupby('data_exec_corte').size().reset_index(name='Qtd')
-            fig1 = px.bar(df_dia, x='data_exec_corte', y='Qtd')
-            st.plotly_chart(fig1, use_container_width=True)
-    with col_g2:
-        if 'Justificativa_polo' in df.columns:
-            st.subheader("Status de Tratamento")
-            tratados = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
-            total = len(df)
-            progresso = (tratados / total) * 100 if total > 0 else 0
-            st.progress(progresso / 100, text=f"{progresso:.1f}% Tratado ({tratados}/{total})")
+    st.header("📊 Dashboard Executivo de Fiscalização")
+    st.markdown("---")
 
+    # Métricas Principais
+    total_ordens = len(df)
+    # Considera tratado se o campo Justificativa_polo não estiver vazio
+    tratados_geral = df[df['Justificativa_polo'].notna() & (df['Justificativa_polo'] != "")].shape[0]
+    pendentes_geral = total_ordens - tratados_geral
+    percentual_geral = (tratados_geral / total_ordens * 100) if total_ordens > 0 else 0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Fiscalizações", total_ordens)
+    m2.metric("Concluídas (Justificadas)", tratados_geral, delta=f"{percentual_geral:.1f}%")
+    m3.metric("Pendentes", pendentes_geral, delta=f"-{pendentes_geral}", delta_color="inverse")
+    m4.metric("Dias Restantes (Mês)", "5", "Estimativa") # Exemplo fixo, poderia ser dinâmico
+
+    st.markdown("### 🔎 Focos da Fiscalização")
+    
+    # Linha 1 de Gráficos: Resultado e Tipos
+    g1, g2 = st.columns(2)
+    
+    with g1:
+        # Gráfico de Pizza: Classificação (Conforme vs Não Conforme)
+        if 'classificacao' in df.columns:
+            st.caption("Distribuição por Resultado (Conformidade)")
+            # Agrupa e conta
+            df_class = df['classificacao'].value_counts().reset_index()
+            df_class.columns = ['Resultado', 'Qtd']
+            fig_pizza = px.pie(df_class, values='Qtd', names='Resultado', 
+                             color_discrete_sequence=px.colors.sequential.RdBu,
+                             hole=0.4)
+            st.plotly_chart(fig_pizza, use_container_width=True)
+            
+    with g2:
+        # Gráfico de Barras: Status da Irregularidade
+        if 'status' in df.columns:
+            st.caption("Top 5 Tipos de Irregularidades/Divergências")
+            df_status = df['status'].value_counts().head(5).reset_index()
+            df_status.columns = ['Tipo Divergência', 'Qtd']
+            fig_bar = px.bar(df_status, x='Qtd', y='Tipo Divergência', orientation='h',
+                           color='Qtd', color_continuous_scale='Reds')
+            fig_bar.update_layout(yaxis={'categoryorder':'total ascending'}) # Ordena barras
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    st.markdown("### 🏆 Performance de Preenchimento dos Polos")
+    
+    # Gráfico de Preenchimento por Polo
+    if 'polo' in df.columns:
+        # Cria tabela dinâmica: conta total e conta preenchidos por polo
+        df_polo_stats = df.groupby('polo').agg(
+            Total=('ID', 'count'),
+            Preenchidos=('Justificativa_polo', lambda x: x[x != ""].count())
+        ).reset_index()
+        
+        # Calcula %
+        df_polo_stats['Percentual'] = (df_polo_stats['Preenchidos'] / df_polo_stats['Total']) * 100
+        df_polo_stats = df_polo_stats.sort_values('Percentual', ascending=True) # Ordena para o gráfico
+
+        fig_perf = px.bar(df_polo_stats, x='Percentual', y='polo', orientation='h',
+                        text=df_polo_stats['Percentual'].apply(lambda x: f'{x:.1f}%'),
+                        title="Ranking de Conclusão das Justificativas (%)",
+                        labels={'Percentual': '% Concluído', 'polo': 'Polo'},
+                        color='Percentual', color_continuous_scale='Bluyl')
+        
+        fig_perf.update_traces(textposition='outside')
+        fig_perf.update_layout(xaxis_range=[0, 110]) # Dá espaço para o texto
+        
+        st.plotly_chart(fig_perf, use_container_width=True)
+
+# --- ABA 2: MEU POLO ---
 with tab2:
     st.subheader(f"Dados de {usuario_atual}")
     st.metric("Minhas Pendências", len(df_user))
@@ -154,6 +228,7 @@ with tab2:
         csv = df_user.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar Meus Dados (CSV)", csv, "meus_dados.csv", "text/csv")
 
+# --- ABA 3: TRATAR PENDÊNCIAS ---
 with tab3:
     st.header("Tratamento de Justificativas")
     if df_user.empty:
@@ -161,7 +236,6 @@ with tab3:
     else:
         lista_ids = df_user['ID'].unique().tolist()
         
-        # --- LÓGICA DE NAVEGAÇÃO SEGURA ---
         if 'indice_navegacao' not in st.session_state:
             st.session_state['indice_navegacao'] = 0
             
@@ -178,7 +252,7 @@ with tab3:
             idx = df[mascara].index[0]
             linha = df.loc[idx]
             
-            # Cálculo de Datas
+            # Cálculos de Data
             diferenca_texto = "-"
             data_exec_completa = "-"
             data_solic_formatada = "-" 
@@ -203,25 +277,7 @@ with tab3:
 
             st.markdown("---")
             
-            # --- FUNÇÕES AUXILIARES ---
-            def limpar_dado(valor):
-                if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
-                    return "-"
-                return str(valor)
-
-            def formatar_sem_decimal(valor):
-                try:
-                    if pd.isna(valor) or str(valor).strip() == '':
-                        return "-"
-                    return str(int(float(valor)))
-                except:
-                    return str(valor)
-
-            def limpar_input_edicao(valor):
-                if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
-                    return ""
-                return str(valor)
-
+            # --- PREPARAÇÃO DE DADOS PARA EXIBIÇÃO ---
             val_id_formatado = formatar_sem_decimal(linha.get('ID'))
             val_cliente_formatado = formatar_sem_decimal(linha.get('numero_cliente'))
             codigo_municipio_limpo = formatar_sem_decimal(linha.get('municipio'))
@@ -278,7 +334,6 @@ with tab3:
             
             with st.form("form_tratativa"):
                 col_e1, col_e2, col_e3 = st.columns(3)
-                # OBS: Adicionamos 'key' única (id_selecionado) para forçar o reset dos campos ao trocar de ID
                 with col_e1:
                     st.markdown("**Análise do Polo**")
                     val_just = linha.get('Justificativa_polo')
@@ -318,7 +373,6 @@ with tab3:
 
                 st.markdown("---")
                 
-                # --- BOTÕES DE AÇÃO ---
                 b1, b2, b3 = st.columns(3)
                 with b1:
                     btn_salvar = st.form_submit_button("💾 Salvar", type="primary")
@@ -340,12 +394,8 @@ with tab3:
                     
                     sucesso = salvar_dados(conn, df)
                     if sucesso:
-                        # Lógica para avançar automaticamente (SEM MEXER NO WIDGET DIRETAMENTE)
                         try:
-                            # Descobre o índice atual na lista que está no seletor
                             idx_atual_lista = lista_ids.index(id_selecionado)
-                            
-                            # Se não for o último item, incrementa a variável de controle e recarrega
                             if idx_atual_lista + 1 < len(lista_ids):
                                 st.session_state['indice_navegacao'] = idx_atual_lista + 1
                                 st.success("✅ Salvo com sucesso! Carregando próximo...")
@@ -354,7 +404,7 @@ with tab3:
                             else:
                                 st.success("✅ Salvo! Você chegou ao fim da lista.")
                                 st.balloons()
-                                st.info("🎉 Não há mais pendências nesta lista. Por favor, clique no botão 'Finalizar e Enviar' (📧) acima para notificar a gestão.")
+                                st.info("🎉 Não há mais pendências.")
                         except ValueError:
                             pass
 
@@ -369,46 +419,19 @@ with tab3:
                     
                     sucesso = salvar_dados(conn, df)
                     if sucesso:
-                        st.warning("🧹 Dados do polo foram apagados para esta ordem!")
+                        st.warning("🧹 Dados apagados!")
                         time.sleep(1)
                         st.rerun()
 
                 if btn_finalizar:
                     total_conforme = df_user[df_user['Conformidade_polo'] == 'Conforme'].shape[0]
                     total_nao_conforme = df_user[df_user['Conformidade_polo'] == 'Não Conforme'].shape[0]
-                    
                     destinatario = "nelio.goncalves@enel.com"
-                    assunto = "[Retorno Polo] - Justificativas Finalizadas"
-                    corpo = (
-                        f"Nélio,\n"
-                        f"As analises sobre os Retornos das Fiscalizações foram finalizadas:\n\n"
-                        f"Polo: {usuario_atual}\n"
-                        f"Conforme: {total_conforme}\n"
-                        f"Não Conforme: {total_nao_conforme}"
-                    )
-                    
+                    assunto = "Justificativas Finalizadas"
+                    corpo = f"Nélio,\nAs justificativas foram finalizadas:\nPolo: {usuario_atual}\nConforme: {total_conforme}\nNão Conforme: {total_nao_conforme}"
                     params = {"subject": assunto, "body": corpo}
                     query_string = urllib.parse.urlencode(params).replace("+", "%20")
                     mailto_link = f"mailto:{destinatario}?{query_string}"
                     
-                    st.success("Resumo gerado com sucesso!")
-                    st.info("Clique abaixo para abrir seu e-mail:")
-                    st.markdown(f'''
-                        <a href="{mailto_link}" target="_blank">
-                            <button style="
-                                background-color: #4CAF50; 
-                                border: none;
-                                color: white;
-                                padding: 15px 32px;
-                                text-align: center;
-                                text-decoration: none;
-                                display: inline-block;
-                                font-size: 16px;
-                                margin: 4px 2px;
-                                cursor: pointer;
-                                border-radius: 12px;
-                            ">
-                                📤 Clique Aqui para Enviar o E-mail
-                            </button>
-                        </a>
-                    ''', unsafe_allow_html=True)
+                    st.success("Resumo gerado!")
+                    st.markdown(f'<a href="{mailto_link}" target="_blank"><button style="background-color:#4CAF50;color:white;padding:15px;border:none;border-radius:12px;cursor:pointer;">📤 Enviar E-mail</button></a>', unsafe_allow_html=True)
