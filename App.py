@@ -3,6 +3,7 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import plotly.express as px
 import time
+import urllib.parse # Necessário para criar o link de e-mail
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SGF - Gestão de Fiscalização", page_icon="⚡", layout="wide")
@@ -193,13 +194,12 @@ with tab3:
 
             st.markdown("---")
             
-            # --- FUNÇÃO PARA LIMPEZA GERAL ---
+            # --- FUNÇÕES AUXILIARES ---
             def limpar_dado(valor):
                 if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
                     return "-"
                 return str(valor)
 
-            # --- FUNÇÃO PARA REMOVER CASAS DECIMAIS ---
             def formatar_sem_decimal(valor):
                 try:
                     if pd.isna(valor) or str(valor).strip() == '':
@@ -208,7 +208,6 @@ with tab3:
                 except:
                     return str(valor)
 
-            # --- FUNÇÃO NOVA PARA LIMPEZA DE INPUTS (Evita "nan") ---
             def limpar_input_edicao(valor):
                 if pd.isna(valor) or str(valor).strip() == "" or str(valor).lower() == "nan":
                     return ""
@@ -295,7 +294,6 @@ with tab3:
                     idx_sancao = OPCOES_SANCAO.index(val_sancao) if val_sancao in OPCOES_SANCAO else 0
                     nova_sancao = st.selectbox("Sanção", OPCOES_SANCAO, index=idx_sancao)
                     
-                    # AQUI A MÁGICA: Usamos a função de limpeza para evitar "nan"
                     val_valor_limpo = limpar_input_edicao(linha.get('VALOR'))
                     novo_valor = st.text_input("Valor (R$)", value=val_valor_limpo)
                     
@@ -303,12 +301,21 @@ with tab3:
                     idx_multa = OPCOES_MULTA.index(val_multa) if val_multa in OPCOES_MULTA else 0
                     nova_multa = st.selectbox("Multa?", OPCOES_MULTA, index=idx_multa)
                     
-                    # AQUI A MÁGICA TAMBÉM
                     val_valor_multa_limpo = limpar_input_edicao(linha.get('VALOR MULTA'))
                     novo_valor_multa = st.text_input("Valor Multa (R$)", value=val_valor_multa_limpo)
 
                 st.markdown("---")
-                if st.form_submit_button("💾 Salvar Tratativa Completa", type="primary"):
+                
+                # --- BOTÕES DE AÇÃO ---
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    btn_salvar = st.form_submit_button("💾 Salvar", type="primary")
+                with b2:
+                    btn_limpar = st.form_submit_button("🧹 Limpar Dados")
+                with b3:
+                    btn_finalizar = st.form_submit_button("📧 Finalizar e Enviar")
+
+                if btn_salvar:
                     df.at[idx, 'Justificativa_polo'] = nova_just
                     df.at[idx, 'Obs_polo'] = nova_obs
                     df.at[idx, 'Conformidade_polo'] = nova_conf
@@ -321,6 +328,69 @@ with tab3:
                     
                     sucesso = salvar_dados(conn, df)
                     if sucesso:
-                        st.success("✅ Todos os dados foram salvos no Google Sheets!")
+                        st.success("✅ Salvo com sucesso!")
                         time.sleep(1)
                         st.rerun()
+
+                if btn_limpar:
+                    # Limpa todas as colunas de preenchimento do polo para esta linha
+                    colunas_para_limpar = [
+                        'Justificativa_polo', 'Obs_polo', 'Conformidade_polo', 
+                        'Conformidade_grids', 'NOTIFICAÇÃO?', 'SANÇÃO', 
+                        'VALOR', 'MULTA?', 'VALOR MULTA'
+                    ]
+                    for col in colunas_para_limpar:
+                        df.at[idx, col] = ""
+                    
+                    sucesso = salvar_dados(conn, df)
+                    if sucesso:
+                        st.warning("🧹 Dados do polo foram apagados para esta ordem!")
+                        time.sleep(1)
+                        st.rerun()
+
+                if btn_finalizar:
+                    # 1. Calcula os totais do polo
+                    total_conforme = df_user[df_user['Conformidade_polo'] == 'Conforme'].shape[0]
+                    total_nao_conforme = df_user[df_user['Conformidade_polo'] == 'Não Conforme'].shape[0]
+                    
+                    # 2. Monta o link do email (mailto)
+                    destinatario = "nelio.goncalves@enel.com"
+                    assunto = "Justificativas Finalizadas"
+                    corpo = (
+                        f"Nélio,\n"
+                        f"As justificativas dos Retornos das Fiscalizações foram finalizadas:\n\n"
+                        f"Polo: {usuario_atual}\n"
+                        f"Conforme: {total_conforme}\n"
+                        f"Não Conforme: {total_nao_conforme}"
+                    )
+                    
+                    # Codifica para URL
+                    params = {
+                        "subject": assunto,
+                        "body": corpo
+                    }
+                    query_string = urllib.parse.urlencode(params).replace("+", "%20")
+                    mailto_link = f"mailto:{destinatario}?{query_string}"
+                    
+                    # 3. Mostra o botão para abrir o email
+                    st.success("Resumo gerado com sucesso!")
+                    st.info("Clique abaixo para abrir seu e-mail:")
+                    st.markdown(f'''
+                        <a href="{mailto_link}" target="_blank">
+                            <button style="
+                                background-color: #4CAF50; 
+                                border: none;
+                                color: white;
+                                padding: 15px 32px;
+                                text-align: center;
+                                text-decoration: none;
+                                display: inline-block;
+                                font-size: 16px;
+                                margin: 4px 2px;
+                                cursor: pointer;
+                                border-radius: 12px;
+                            ">
+                                📤 Clique Aqui para Enviar o E-mail
+                            </button>
+                        </a>
+                    ''', unsafe_allow_html=True)
